@@ -1,0 +1,43 @@
+{
+  "name": "local-review",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "local-review": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "npm run build:server && npm run build:frontend",
+    "dev": "node -e \"const{spawn}=require('child_process');const s=spawn('npx',['tsx','src/cli/index.ts','--no-open'],{stdio:'inherit'});const v=spawn('npx',['vite','--config','vite.config.ts','--open'],{stdio:'inherit'});process.on('SIGINT',()=>{s.kill();v.kill();process.exit()})\"",
+    "dev:server": "tsx src/cli/index.ts --no-open",
+    "dev:frontend": "vite --config vite.config.ts --open",
+    "test": "vitest run",
+    "build:frontend": "vite build",
+    "build:server": "tsc -p tsconfig.server.json && node -e \"const fs=require('fs');const f='dist/cli/index.js';const c=fs.readFileSync(f,'utf8');if(!c.startsWith('#!'))fs.writeFileSync(f,'#!/usr/bin/env node\\n'+c)\""
+  },
+  "dependencies": {
+    "@tanstack/react-virtual": "3.10.9",
+    "commander": "12.1.0",
+    "express": "4.21.0",
+    "open": "10.1.0",
+    "react": "18.3.1",
+    "react-diff-view": "3.2.1",
+    "react-dom": "18.3.1",
+    "refractor": "4.8.1",
+    "simple-git": "3.27.0"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.0",
+    "@types/node": "22.9.0",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3",
+    "vite": "5.4.11",
+    "vitest": "2.1.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
