@@ -129,4 +129,4 @@ cargo build --release --features tui  # release + TUI
 
 ## License
 
-TBD
+MIT
