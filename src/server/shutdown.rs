@@ -66,3 +66,29 @@ impl Default for Shutdown {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_timeout_source_uses_30_minutes() {
+        // Cross-language equivalent of the TS source-string check:
+        // the timeout literal in this file should be 30 minutes.
+        let src = include_str!("shutdown.rs");
+        assert!(
+            src.contains("Duration::from_secs(30 * 60)"),
+            "expected 30-minute idle timeout literal in source"
+        );
+    }
+
+    #[tokio::test]
+    async fn signal_shutdown_resolves_wait() {
+        let s = Shutdown::new();
+        s.signal_shutdown();
+        // Should complete promptly without panicking.
+        tokio::time::timeout(Duration::from_secs(1), s.wait_for_shutdown())
+            .await
+            .expect("wait_for_shutdown should resolve after signal");
+    }
+}

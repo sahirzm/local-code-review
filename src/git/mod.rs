@@ -267,3 +267,164 @@ impl GitModule {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::git::diff_parser::parse_diff;
+    use std::fs;
+    use std::path::Path;
+
+    struct Fixture {
+        _dir: tempfile::TempDir,
+        git: GitModule,
+        path: std::path::PathBuf,
+        base: String,
+    }
+
+    fn sig() -> git2::Signature<'static> {
+        git2::Signature::now("t", "t@t.com").unwrap()
+    }
+
+    fn commit_all(repo: &git2::Repository, msg: &str) -> git2::Oid {
+        let mut idx = repo.index().unwrap();
+        idx.add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+            .unwrap();
+        idx.write().unwrap();
+        let tree_id = idx.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let parent = repo
+            .head()
+            .ok()
+            .and_then(|h| h.peel_to_commit().ok());
+        let parents: Vec<&git2::Commit> = parent.iter().collect();
+        let s = sig();
+        repo.commit(Some("HEAD"), &s, &s, msg, &tree, &parents)
+            .unwrap()
+    }
+
+    fn fixture() -> Fixture {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        fs::write(dir.path().join("a.txt"), "one\ntwo\nthree\n").unwrap();
+        let oid = commit_all(&repo, "init");
+        let git = GitModule::new(dir.path().to_str().unwrap()).unwrap();
+        Fixture {
+            path: dir.path().to_path_buf(),
+            _dir: dir,
+            git,
+            base: oid.to_string(),
+        }
+    }
+
+    #[test]
+    fn diff_preserves_line_origin_prefix() {
+        // Regression test: diff_to_string used to drop the +/- origin char,
+        // causing parse_diff to count 0 additions/deletions.
+        let fx = fixture();
+        fs::write(fx.path.join("a.txt"), "one\nTWO\nthree\nfour\n").unwrap();
+        let raw = fx.git.get_working_diff().unwrap();
+        assert!(
+            raw.lines().any(|l| l.starts_with('+')),
+            "diff should contain '+' lines, got:\n{}",
+            raw
+        );
+        assert!(
+            raw.lines().any(|l| l.starts_with('-')),
+            "diff should contain '-' lines, got:\n{}",
+            raw
+        );
+        let parsed = parse_diff(&raw);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].additions, 2);
+        assert_eq!(parsed[0].deletions, 1);
+    }
+
+    #[test]
+    fn list_untracked_finds_new_files_only() {
+        let fx = fixture();
+        fs::write(fx.path.join("untracked.txt"), "x").unwrap();
+        fs::write(fx.path.join("a.txt"), "modified\n").unwrap();
+        let untracked = fx.git.list_untracked().unwrap();
+        assert_eq!(untracked, vec!["untracked.txt".to_string()]);
+    }
+
+    #[test]
+    fn list_untracked_empty_when_clean() {
+        let fx = fixture();
+        assert!(fx.git.list_untracked().unwrap().is_empty());
+    }
+
+    #[test]
+    fn diff_from_to_workdir_excludes_untracked_by_default() {
+        let fx = fixture();
+        fs::write(fx.path.join("untracked.txt"), "new file\n").unwrap();
+        fs::write(fx.path.join("a.txt"), "one\nTWO\nthree\n").unwrap();
+        let raw = fx.git.get_diff_from_to_workdir(&fx.base, false).unwrap();
+        let parsed = parse_diff(&raw);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].new_path, "a.txt");
+    }
+
+    #[test]
+    fn diff_from_to_workdir_includes_untracked_when_requested() {
+        let fx = fixture();
+        fs::write(fx.path.join("untracked.txt"), "new content\n").unwrap();
+        let raw = fx.git.get_diff_from_to_workdir(&fx.base, true).unwrap();
+        let parsed = parse_diff(&raw);
+        let names: Vec<&str> = parsed.iter().map(|f| f.new_path.as_str()).collect();
+        assert!(
+            names.contains(&"untracked.txt"),
+            "expected untracked.txt in diff, got {:?}",
+            names
+        );
+        let untracked = parsed
+            .iter()
+            .find(|f| f.new_path == "untracked.txt")
+            .unwrap();
+        assert_eq!(untracked.additions, 1);
+        assert_eq!(untracked.status, FileStatus::Added);
+    }
+
+    #[test]
+    fn diff_from_to_workdir_combines_committed_and_uncommitted() {
+        // Make a second commit, then add an unstaged + a staged change.
+        let fx = fixture();
+        let repo = git2::Repository::open(&fx.path).unwrap();
+        fs::write(fx.path.join("committed.txt"), "c\n").unwrap();
+        commit_all(&repo, "second commit");
+
+        // Unstaged edit on existing file.
+        fs::write(fx.path.join("a.txt"), "one\ntwo\nthree\nfour\n").unwrap();
+
+        // Staged new file.
+        fs::write(fx.path.join("staged.txt"), "s\n").unwrap();
+        let mut idx = repo.index().unwrap();
+        idx.add_path(Path::new("staged.txt")).unwrap();
+        idx.write().unwrap();
+
+        let raw = fx.git.get_diff_from_to_workdir(&fx.base, false).unwrap();
+        let parsed = parse_diff(&raw);
+        let names: std::collections::HashSet<&str> =
+            parsed.iter().map(|f| f.new_path.as_str()).collect();
+        assert!(names.contains("a.txt"));
+        assert!(names.contains("committed.txt"));
+        assert!(names.contains("staged.txt"));
+    }
+
+    #[test]
+    fn get_staged_diff_counts_additions() {
+        let fx = fixture();
+        let repo = git2::Repository::open(&fx.path).unwrap();
+        fs::write(fx.path.join("a.txt"), "one\ntwo\nthree\nfour\n").unwrap();
+        let mut idx = repo.index().unwrap();
+        idx.add_path(Path::new("a.txt")).unwrap();
+        idx.write().unwrap();
+
+        let raw = fx.git.get_staged_diff().unwrap();
+        let parsed = parse_diff(&raw);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].additions, 1);
+        assert_eq!(parsed[0].deletions, 0);
+    }
+}

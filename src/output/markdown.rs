@@ -511,6 +511,32 @@ mod tests {
         assert_eq!(detect_language("file.tsx"), "typescript");
         assert_eq!(detect_language("file.jsx"), "javascript");
     }
+
+    #[test]
+    fn handles_comments_without_side_field() {
+        let input = MarkdownInput {
+            comments: vec![
+                make_comment(Comment {
+                    comment_type: CommentType::Overall,
+                    category: CommentCategory::Fix,
+                    text: "No side overall".into(),
+                    ..Default::default()
+                }),
+                make_comment(Comment {
+                    comment_type: CommentType::File,
+                    category: CommentCategory::Nit,
+                    text: "No side file".into(),
+                    file_path: Some("src/server.ts".into()),
+                    ..Default::default()
+                }),
+            ],
+            diff_data: diff_with_files(),
+            metadata: base_meta(),
+        };
+        let result = generate_markdown(&input);
+        assert!(result.contains("- [fix] No side overall"));
+        assert!(result.contains("- [nit] No side file"));
+    }
 }
 
 impl Default for Comment {

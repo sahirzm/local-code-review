@@ -71,3 +71,93 @@ fn hex_digit(b: u8) -> Option<u8> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::Request,
+        middleware,
+        routing::get,
+        Router,
+    };
+    use tower::ServiceExt;
+
+    fn app(repo_root: &str) -> Router {
+        let state = PathGuardState { repo_root: repo_root.to_string() };
+        Router::new()
+            .route("/api/v1/file/*path", get(|| async { "ok" }))
+            .route("/other", get(|| async { "ok" }))
+            .layer(middleware::from_fn_with_state(state, path_guard))
+    }
+
+    async fn status(repo_root: &str, uri: &str) -> u16 {
+        let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+        let res = app(repo_root).oneshot(req).await.unwrap();
+        res.status().as_u16()
+    }
+
+    fn temp_repo() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap()
+    }
+
+    #[tokio::test]
+    async fn passes_for_valid_repo_relative_path() {
+        let dir = temp_repo();
+        let root = dir.path().to_str().unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/index.ts"), "x").unwrap();
+        assert_eq!(status(root, "/api/v1/file/src/index.ts").await, 200);
+    }
+
+    #[tokio::test]
+    async fn rejects_parent_traversal() {
+        let dir = temp_repo();
+        let root = dir.path().to_str().unwrap();
+        // Use ../../../etc/passwd which escapes any depth.
+        assert_eq!(status(root, "/api/v1/file/../../../etc/passwd").await, 403);
+    }
+
+    #[tokio::test]
+    async fn rejects_absolute_path_outside_repo() {
+        let dir = temp_repo();
+        let root = dir.path().to_str().unwrap();
+        assert_eq!(status(root, "/api/v1/file//etc/passwd").await, 403);
+    }
+
+    #[tokio::test]
+    async fn passes_for_nested_path_within_repo() {
+        let dir = temp_repo();
+        let root = dir.path().to_str().unwrap();
+        std::fs::create_dir_all(dir.path().join("deep/nested")).unwrap();
+        std::fs::write(dir.path().join("deep/nested/file.txt"), "x").unwrap();
+        assert_eq!(status(root, "/api/v1/file/deep/nested/file.txt").await, 200);
+    }
+
+    #[tokio::test]
+    async fn rejects_paths_with_null_bytes() {
+        let dir = temp_repo();
+        let root = dir.path().to_str().unwrap();
+        // Axum normalizes %00 to a literal NUL in the decoded path.
+        assert_eq!(status(root, "/api/v1/file/src%00/etc/passwd").await, 403);
+    }
+
+    #[tokio::test]
+    async fn skips_guard_for_non_file_routes() {
+        let dir = temp_repo();
+        let root = dir.path().to_str().unwrap();
+        // /other is not under /api/v1/file/ so guard should pass through.
+        assert_eq!(status(root, "/other").await, 200);
+    }
+
+    #[tokio::test]
+    async fn handles_backslash_paths_without_crashing() {
+        // On Linux, backslash is a literal filename char, not a separator.
+        // Should either pass (treated as literal) or be rejected — not crash.
+        let dir = temp_repo();
+        let root = dir.path().to_str().unwrap();
+        let s = status(root, "/api/v1/file/src%5Cindex.ts").await;
+        assert!(s == 200 || s == 403, "unexpected status: {}", s);
+    }
+}

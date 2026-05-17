@@ -114,4 +114,69 @@ mod tests {
         assert_eq!(result.mode, "working");
         assert!(result.args.is_empty());
     }
+
+    fn commit_repo() -> (GitModule, tempfile::TempDir, String) {
+        use std::fs;
+        let dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        let path = dir.path().join("a.txt");
+        fs::write(&path, "hi\n").unwrap();
+        let mut idx = repo.index().unwrap();
+        idx.add_path(std::path::Path::new("a.txt")).unwrap();
+        idx.write().unwrap();
+        let tree_id = idx.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let sig = git2::Signature::now("t", "t@t.com").unwrap();
+        let oid = repo
+            .commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+            .unwrap();
+        let git = GitModule::new(dir.path().to_str().unwrap()).unwrap();
+        (git, dir, oid.to_string())
+    }
+
+    #[tokio::test]
+    async fn returns_all_mode_with_explicit_base() {
+        let (git, _dir, oid) = commit_repo();
+        let options = CliOptions {
+            all: true,
+            base: Some(oid.clone()),
+            ..Default::default()
+        };
+        let result = resolve_range(&options, &git).await.unwrap();
+        assert_eq!(result.mode, "all");
+        assert_eq!(result.args, vec![oid]);
+    }
+
+    #[tokio::test]
+    async fn all_mode_without_remote_falls_back_to_error() {
+        let (git, _dir, _oid) = commit_repo();
+        let options = CliOptions {
+            all: true,
+            ..Default::default()
+        };
+        // No upstream/origin configured → get_last_pushed_commit should error.
+        assert!(resolve_range(&options, &git).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn resolves_base_flag_to_commits_mode() {
+        let (git, _dir, oid) = commit_repo();
+        let options = CliOptions {
+            base: Some(oid.clone()),
+            ..Default::default()
+        };
+        let result = resolve_range(&options, &git).await.unwrap();
+        assert_eq!(result.mode, "commits");
+        assert_eq!(result.args[0], oid);
+        assert_eq!(result.args[1], "HEAD");
+    }
+
+    #[tokio::test]
+    async fn defaults_to_last_pushed_commit() {
+        // With no remote configured, get_last_pushed_commit fails — verifies the
+        // default branch invokes that path.
+        let (git, _dir, _oid) = commit_repo();
+        let options = CliOptions::default();
+        assert!(resolve_range(&options, &git).await.is_err());
+    }
 }
