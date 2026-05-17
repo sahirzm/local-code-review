@@ -146,6 +146,7 @@ pub struct FinishRequest {
     pub comments: Vec<Comment>,
     pub reviewed_files: Vec<String>,
     pub metadata: FinishMetadata,
+    #[serde(rename = "_csrf")]
     pub _csrf: String,
 }
 
@@ -168,6 +169,7 @@ pub struct FinishResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SessionBackup {
     pub session: ReviewSession,
+    #[serde(rename = "_csrf")]
     pub _csrf: String,
 }
 
@@ -215,4 +217,44 @@ pub struct FileTreeNode {
 pub enum TreeNodeType {
     File,
     Directory,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finish_request_deserializes_underscore_csrf_from_frontend_payload() {
+        // Frontend sends `_csrf` literally; rename_all = "camelCase" would otherwise
+        // turn it into `csrf` and break /api/v1/finish with a 422.
+        let body = r#"{
+            "comments": [],
+            "reviewedFiles": [],
+            "metadata": {"commitRange": "HEAD~1..HEAD", "timestamp": "2026-05-17T00:00:00Z"},
+            "_csrf": "token-abc"
+        }"#;
+        let parsed: FinishRequest = serde_json::from_str(body).unwrap();
+        assert_eq!(parsed._csrf, "token-abc");
+        assert_eq!(parsed.metadata.commit_range, "HEAD~1..HEAD");
+    }
+
+    #[test]
+    fn session_backup_deserializes_underscore_csrf_from_frontend_payload() {
+        let body = r#"{
+            "session": {
+                "version": 2,
+                "commitRange": "HEAD~1..HEAD",
+                "repoPath": "/repo",
+                "repoPathHash": "abc123",
+                "comments": [],
+                "reviewedFiles": [],
+                "viewMode": "split",
+                "createdAt": "2026-05-17T00:00:00Z",
+                "lastAccessedAt": "2026-05-17T00:00:00Z"
+            },
+            "_csrf": "token-abc"
+        }"#;
+        let parsed: SessionBackup = serde_json::from_str(body).unwrap();
+        assert_eq!(parsed._csrf, "token-abc");
+    }
 }
