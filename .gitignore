@@ -1,2 +1,4 @@
 target/
 .local-review/
+frontend/dist/
+frontend/node_modules/
