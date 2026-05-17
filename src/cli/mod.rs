@@ -17,40 +17,51 @@ fn port_in_range(s: &str) -> Result<u16, String> {
 #[command(about = "Local code review tool", long_about = None)]
 #[command(version)]
 pub struct Cli {
+    /// Base commit/ref (defaults to last pushed commit)
     #[arg(value_name = "COMMIT")]
     pub commit1: Option<String>,
 
+    /// Head commit/ref (defaults to HEAD)
     #[arg(value_name = "COMMIT")]
     pub commit2: Option<String>,
 
+    /// Port to bind the review server (auto-increments if in use)
     #[arg(short = 'p', long = "port", value_name = "PORT", default_value = "8989", value_parser = port_in_range)]
     pub port: u16,
 
+    /// Base ref to diff against (alternative to positional COMMIT)
     #[arg(short = 'b', long = "base", value_name = "REF")]
     pub base: Option<String>,
 
+    /// Do not open a browser window automatically
     #[arg(long = "no-open", action = ArgAction::SetFalse)]
     pub open: bool,
 
+    /// Path to write the review markdown output
     #[arg(short = 'o', long = "output", value_name = "PATH")]
     pub output: Option<String>,
 
+    /// Review staged changes (index vs HEAD)
     #[arg(long = "staged", default_value_t = false)]
     pub staged: bool,
 
+    /// Review unstaged changes (working tree vs index)
     #[arg(long = "unstaged", default_value_t = false)]
     pub unstaged: bool,
 
+    /// Review all working tree changes (staged + unstaged vs HEAD)
     #[arg(long = "working", default_value_t = false)]
     pub working: bool,
 
+    /// Run `git fetch` before resolving the diff range
     #[arg(long = "fetch", default_value_t = false)]
     pub fetch: bool,
 
+    /// Run in terminal UI mode instead of launching the web server
     #[arg(long = "tui", default_value_t = false)]
     pub tui: bool,
 
-    /// Serve frontend from this directory instead of the embedded assets (dev override).
+    /// Serve frontend from this directory instead of the embedded assets (dev override)
     #[arg(long = "frontend-dir", value_name = "DIR", hide = true)]
     pub frontend_dir: Option<String>,
 }
