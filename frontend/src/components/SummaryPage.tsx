@@ -1,7 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { Comment } from '../../../shared/types.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
 import { downloadMarkdown } from '../utils/client-markdown.js';
+
+const CLOSE_DELAY_SECONDS = 5;
 
 interface SummaryPageProps {
   markdown: string;
@@ -16,7 +18,9 @@ const CATEGORIES: CategoryKey[] = ['fix', 'suggestion', 'question', 'nit'];
 export function SummaryPage({ markdown, outputPath, csrfToken, onContinue }: SummaryPageProps): React.JSX.Element {
   const { comments } = useReviewStore();
   const [copied, setCopied] = useState(false);
-  const [shutdownMsg, setShutdownMsg] = useState('');
+  const [closing, setClosing] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(CLOSE_DELAY_SECONDS);
+  const [showSafeToClose, setShowSafeToClose] = useState(false);
 
   const fileCount = new Set(comments.filter((c) => c.filePath).map((c) => c.filePath)).size;
   const counts = Object.fromEntries(CATEGORIES.map((cat) => [cat, comments.filter((c) => c.category === cat).length])) as Record<CategoryKey, number>;
@@ -32,7 +36,7 @@ export function SummaryPage({ markdown, outputPath, csrfToken, onContinue }: Sum
   }, [markdown]);
 
   const handleClose = useCallback(async () => {
-    setShutdownMsg('Server shutting down...');
+    setClosing(true);
     try {
       await fetch('/api/v1/shutdown', {
         method: 'POST',
@@ -44,10 +48,28 @@ export function SummaryPage({ markdown, outputPath, csrfToken, onContinue }: Sum
     }
   }, [csrfToken]);
 
-  if (shutdownMsg) {
+  useEffect(() => {
+    if (!closing) return;
+    if (secondsLeft <= 0) {
+      // Browsers block window.close() on tabs the user opened directly. Try
+      // anyway — works for tabs opened via JS — and otherwise fall back to a
+      // "safe to close" message after a short delay.
+      window.close();
+      const id = setTimeout(() => setShowSafeToClose(true), 2000);
+      return () => clearTimeout(id);
+    }
+    const id = setTimeout(() => setSecondsLeft((n) => n - 1), 1000);
+    return () => clearTimeout(id);
+  }, [closing, secondsLeft]);
+
+  if (closing) {
     return (
       <div className="summary-page">
-        <div className="shutdown-message" role="status">{shutdownMsg}</div>
+        <div className="shutdown-message" role="status">
+          {showSafeToClose
+            ? 'Server shut down. It is safe to close this tab.'
+            : `Server shut down. Closing tab in ${secondsLeft}s...`}
+        </div>
       </div>
     );
   }
