@@ -173,7 +173,7 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
           className="tree-dir-btn"
           onClick={() => setExpanded((e) => !e)}
           type="button"
-          style={{ paddingLeft: `${depth * 12 + 4}px` }}
+          style={{ paddingLeft: `${depth * 14 + 10}px` }}
         >
           <span className="tree-icon" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
           <span className="tree-dir-name">{node.name}/</span>
@@ -200,7 +200,7 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
         className="tree-file-btn"
         onClick={() => onFileClick(node.path)}
         type="button"
-        style={{ paddingLeft: `${depth * 12 + 4}px` }}
+        style={{ paddingLeft: `${depth * 14 + 10}px` }}
         aria-current={isActive ? 'true' : undefined}
       >
         <span

@@ -2,6 +2,12 @@ html {
   font-size: 16px;
 }
 
+@media (-webkit-min-device-pixel-ratio: 1.5), (min-resolution: 144dpi) {
+  html {
+    font-size: 17px;
+  }
+}
+
 @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
   html {
     font-size: 18px;
@@ -100,7 +106,7 @@ body {
   border: none;
   color: #fff;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 /* Loading skeleton */
@@ -182,7 +188,7 @@ body {
 
 /* Status badges */
 .badge {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 3px;
@@ -441,7 +447,7 @@ body {
 }
 
 .category-badge {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 3px;
@@ -918,8 +924,8 @@ body {
 
 /* Sidebar */
 .sidebar {
-  width: 260px;
-  min-width: 260px;
+  width: 16.25rem;
+  min-width: 16.25rem;
   background: #181818;
   border-right: 1px solid #333;
   display: flex;
@@ -928,8 +934,8 @@ body {
 }
 
 .sidebar-collapsed {
-  width: 36px;
-  min-width: 36px;
+  width: 2.25rem;
+  min-width: 2.25rem;
   background: #181818;
   border-right: 1px solid #333;
   display: flex;
@@ -948,7 +954,7 @@ body {
 }
 
 .sidebar-title {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #ccc;
 }
@@ -976,12 +982,12 @@ body {
 
 .sidebar-search {
   width: 100%;
-  padding: 5px 8px;
+  padding: 6px 10px;
   background: #252525;
   color: #d4d4d4;
   border: 1px solid #444;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-family: inherit;
   margin-bottom: 6px;
 }
@@ -1000,12 +1006,12 @@ body {
 }
 
 .filter-pill {
-  padding: 1px 7px;
+  padding: 2px 9px;
   border-radius: 10px;
   border: 1px solid #444;
   background: #2d2d2d;
   color: #aaa;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
@@ -1047,14 +1053,14 @@ body {
 .tree-file-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   width: 100%;
-  padding: 2px 8px;
+  padding: 4px 10px;
   background: none;
   border: none;
   color: #d4d4d4;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-family: inherit;
   text-align: left;
   white-space: nowrap;
@@ -1066,8 +1072,8 @@ body {
 }
 
 .tree-icon {
-  font-size: 0.6rem;
-  width: 10px;
+  font-size: 0.75rem;
+  width: 12px;
   flex-shrink: 0;
   text-align: center;
 }
@@ -1106,15 +1112,15 @@ body {
 .tree-comment-count {
   background: #569cd640;
   color: #569cd6;
-  font-size: 0.6rem;
-  padding: 0 4px;
+  font-size: 0.7rem;
+  padding: 1px 6px;
   border-radius: 8px;
   flex-shrink: 0;
 }
 
 .tree-line-counts {
   font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   flex-shrink: 0;
   display: flex;
   gap: 3px;
