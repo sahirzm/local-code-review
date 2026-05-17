@@ -107,9 +107,11 @@ impl GitModule {
     fn diff_to_string(_repo: &Repository, diff: git2::Diff) -> anyhow::Result<String> {
         let mut output = Vec::new();
         diff.print(DiffFormat::Patch, |_delta, _hunk, line| {
-            if let Ok(content) = str::from_utf8(line.content()) {
-                output.extend_from_slice(content.as_bytes());
+            match line.origin() {
+                '+' | '-' | ' ' => output.push(line.origin() as u8),
+                _ => {}
             }
+            output.extend_from_slice(line.content());
             true
         })?;
         Ok(String::from_utf8(output)?)
