@@ -95,6 +95,7 @@ async fn main() -> anyhow::Result<()> {
         csrf_token,
         output_path,
         git: Arc::new(Mutex::new(git)),
+        frontend_dir: options.frontend_dir.clone().map(std::path::PathBuf::from),
     };
 
     let (actual_port, shutdown) = server::start_server(server_state, options.port).await?;

@@ -52,6 +52,8 @@ pub struct CliOptions {
     pub working: bool,
     pub fetch: bool,
     pub tui: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frontend_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

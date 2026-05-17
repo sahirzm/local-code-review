@@ -1,13 +1,15 @@
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::Router;
 use tokio::sync::Mutex;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::git::GitModule;
 use crate::types::{DiffResponse, ReviewMetadata};
 
+pub mod frontend;
 pub mod middleware;
 pub mod routes;
 pub mod shutdown;
@@ -21,6 +23,7 @@ pub struct ServerState {
     pub csrf_token: String,
     pub output_path: String,
     pub git: Arc<Mutex<GitModule>>,
+    pub frontend_dir: Option<PathBuf>,
 }
 
 pub async fn start_server(
@@ -42,15 +45,15 @@ pub async fn start_server(
 
     let api = routes::create_api_router(app_state);
 
-    let frontend_dir = std::env::current_exe()?
-        .parent()
-        .map(|p| p.join("frontend").join("dist"))
-        .unwrap_or_else(|| std::env::current_dir().unwrap().join("frontend").join("dist"));
-    eprintln!("Serving frontend from: {}", frontend_dir.display());
-
-    let app = Router::new()
-        .nest("/", api)
-        .fallback_service(ServeDir::new(&frontend_dir));
+    let app = Router::new().nest("/", api);
+    let app = match state.frontend_dir {
+        Some(dir) => {
+            eprintln!("Serving frontend from disk: {}", dir.display());
+            let index = dir.join("index.html");
+            app.fallback_service(ServeDir::new(&dir).fallback(ServeFile::new(index)))
+        }
+        None => app.fallback(frontend::serve_embedded),
+    };
 
     let actual_port = bind_port(app, port).await?;
     Ok((actual_port, shutdown))

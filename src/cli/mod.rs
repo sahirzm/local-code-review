@@ -49,6 +49,10 @@ pub struct Cli {
 
     #[arg(long = "tui", default_value_t = false)]
     pub tui: bool,
+
+    /// Serve frontend from this directory instead of the embedded assets (dev override).
+    #[arg(long = "frontend-dir", value_name = "DIR", hide = true)]
+    pub frontend_dir: Option<String>,
 }
 
 pub fn parse_args() -> anyhow::Result<CliOptions> {
@@ -86,6 +90,7 @@ pub fn parse_args() -> anyhow::Result<CliOptions> {
         working: cli.working,
         fetch: cli.fetch,
         tui: cli.tui,
+        frontend_dir: cli.frontend_dir,
     })
 }
 
