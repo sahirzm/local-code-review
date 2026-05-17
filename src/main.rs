@@ -1,5 +1,35 @@
+use std::io::{IsTerminal, Write};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+fn prompt_include_untracked(git: &git::GitModule) -> anyhow::Result<bool> {
+    let untracked = git.list_untracked().unwrap_or_default();
+    if untracked.is_empty() {
+        return Ok(false);
+    }
+
+    eprintln!("\nUntracked files ({}):", untracked.len());
+    let preview = 50;
+    for path in untracked.iter().take(preview) {
+        eprintln!("  {}", path);
+    }
+    if untracked.len() > preview {
+        eprintln!("  ... and {} more", untracked.len() - preview);
+    }
+
+    if !std::io::stdin().is_terminal() {
+        eprintln!("(stdin is not a TTY; skipping untracked files)");
+        return Ok(false);
+    }
+
+    eprint!("Include untracked files in review? [y/N] ");
+    std::io::stderr().flush().ok();
+
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    let yes = matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes");
+    Ok(yes)
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -31,6 +61,11 @@ async fn main() -> anyhow::Result<()> {
         "unstaged" => git.get_unstaged_diff()?,
         "working" => git.get_working_diff()?,
         "commits" => git.get_diff(&range.args[0], &range.args[1])?,
+        "all" => {
+            let base = &range.args[0];
+            let include_untracked = prompt_include_untracked(&git)?;
+            git.get_diff_from_to_workdir(base, include_untracked)?
+        }
         _ => anyhow::bail!("Unknown range mode: {}", range.mode),
     };
 

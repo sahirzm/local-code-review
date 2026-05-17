@@ -149,6 +149,44 @@ impl GitModule {
         Self::diff_to_string(self.repo(), diff)
     }
 
+    pub fn list_untracked(&self) -> anyhow::Result<Vec<String>> {
+        let mut opts = git2::StatusOptions::new();
+        opts.include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .include_ignored(false);
+        let statuses = self.repo().statuses(Some(&mut opts))?;
+        let mut out = Vec::new();
+        for entry in statuses.iter() {
+            if entry.status().is_wt_new() {
+                if let Some(p) = entry.path() {
+                    out.push(p.to_string());
+                }
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
+
+    pub fn get_diff_from_to_workdir(
+        &self,
+        base: &str,
+        include_untracked: bool,
+    ) -> anyhow::Result<String> {
+        let base_tree = self
+            .repo()
+            .revparse_single(base)?
+            .peel_to_tree()
+            .map_err(|_| anyhow::anyhow!("Could not resolve {} to a tree", base))?;
+        let mut opts = DiffOptions::new();
+        opts.include_untracked(include_untracked)
+            .recurse_untracked_dirs(include_untracked)
+            .show_untracked_content(include_untracked);
+        let diff = self
+            .repo()
+            .diff_tree_to_workdir_with_index(Some(&base_tree), Some(&mut opts))?;
+        Self::diff_to_string(self.repo(), diff)
+    }
+
     pub fn get_file_list(
         &self,
         commit1: &str,

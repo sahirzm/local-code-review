@@ -61,6 +61,10 @@ pub struct Cli {
     #[arg(long = "tui", default_value_t = false)]
     pub tui: bool,
 
+    /// Review everything since last pushed commit, including staged, unstaged, and (optionally) untracked files
+    #[arg(long = "all", default_value_t = false)]
+    pub all: bool,
+
     /// Serve frontend from this directory instead of the embedded assets (dev override)
     #[arg(long = "frontend-dir", value_name = "DIR", hide = true)]
     pub frontend_dir: Option<String>,
@@ -69,18 +73,18 @@ pub struct Cli {
 pub fn parse_args() -> anyhow::Result<CliOptions> {
     let cli = Cli::parse();
 
-    let mode_flags = [cli.staged, cli.unstaged, cli.working]
+    let mode_flags = [cli.staged, cli.unstaged, cli.working, cli.all]
         .iter()
         .filter(|&&x| x)
         .count();
 
     if mode_flags > 1 {
-        anyhow::bail!("--staged, --unstaged, and --working are mutually exclusive");
+        anyhow::bail!("--staged, --unstaged, --working, and --all are mutually exclusive");
     }
 
     if mode_flags > 0 && (cli.commit1.is_some() || cli.commit2.is_some()) {
         anyhow::bail!(
-            "--staged, --unstaged, and --working cannot be combined with positional commits"
+            "--staged, --unstaged, --working, and --all cannot be combined with positional commits"
         );
     }
 
@@ -101,6 +105,7 @@ pub fn parse_args() -> anyhow::Result<CliOptions> {
         working: cli.working,
         fetch: cli.fetch,
         tui: cli.tui,
+        all: cli.all,
         frontend_dir: cli.frontend_dir,
     })
 }

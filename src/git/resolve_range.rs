@@ -32,6 +32,16 @@ pub async fn resolve_range(options: &CliOptions, git: &GitModule) -> anyhow::Res
             args: vec![],
         });
     }
+    if options.all {
+        let base = match options.base.as_ref() {
+            Some(b) => git.resolve_ref(b)?,
+            None => git.get_last_pushed_commit()?,
+        };
+        return Ok(RangeResult {
+            mode: "all".into(),
+            args: vec![base],
+        });
+    }
     if let Some(ref base) = options.base {
         let resolved = git.resolve_ref(base)?;
         return Ok(RangeResult {
