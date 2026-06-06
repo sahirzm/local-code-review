@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Diff, Hunk, tokenize, markEdits, getChangeKey } from 'react-diff-view';
+import { Diff, Hunk, Decoration, tokenize, markEdits, getChangeKey } from 'react-diff-view';
 import type { ViewType, HunkTokens, EventMap, ChangeEventArgs } from 'react-diff-view';
 import { refractor } from 'refractor';
 import type { ParsedFileDiff, Comment } from '../../../shared/types.js';
@@ -322,7 +322,18 @@ export function FileDiff({ file, viewType, activeCommentId, scrollDirection }: F
             gutterEvents={gutterEvents}
             selectedChanges={selectedChanges}
           >
-            {(hunks) => hunks.map((hunk) => <Hunk key={hunk.content} hunk={hunk} />)}
+            {(hunks) => hunks.flatMap((hunk, i) => {
+            const nodes: React.ReactElement[] = [];
+            if (i > 0) {
+              nodes.push(
+                <Decoration key={`sep-${hunk.content}`}>
+                  <div className="hunk-separator">{hunk.content}</div>
+                </Decoration>
+              );
+            }
+            nodes.push(<Hunk key={hunk.content} hunk={hunk} />);
+            return nodes;
+          })}
           </Diff>
         </>
       ) : (

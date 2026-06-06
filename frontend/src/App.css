@@ -265,6 +265,17 @@ body {
   line-height: 1.5;
 }
 
+.hunk-separator {
+  padding: 2px 8px;
+  background: #252540;
+  color: #7a7aaa;
+  font-family: var(--diff-font-family);
+  font-size: 0.75rem;
+  border-top: 1px solid #333360;
+  border-bottom: 1px solid #333360;
+  user-select: none;
+}
+
 .diff-gutter {
   min-width: 5ch;
 }
