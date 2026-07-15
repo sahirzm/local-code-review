@@ -115,6 +115,8 @@ export type ThemeId =
 
 export interface UserPreferences {
   theme: ThemeId;
+  /** Diff text size in px. */
+  fontSize: number;
 }
 
 export interface FileTreeNode {

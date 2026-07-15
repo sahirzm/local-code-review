@@ -20,6 +20,15 @@ type AppView = 'review' | 'summary';
 
 const PREFS_KEY = 'local-review:preferences';
 
+const MIN_FONT_SIZE = 10;
+const MAX_FONT_SIZE = 20;
+const DEFAULT_FONT_SIZE = 13;
+
+function clampFontSize(size: number): number {
+  if (!Number.isFinite(size)) return DEFAULT_FONT_SIZE;
+  return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(size)));
+}
+
 function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }): React.JSX.Element {
   useEffect(() => {
     const timer = setTimeout(onDismiss, 5000);
@@ -39,10 +48,13 @@ function loadPreferences(): UserPreferences {
     const raw = localStorage.getItem(PREFS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<UserPreferences>;
-      return { theme: normalizeThemeId(parsed.theme) };
+      return {
+        theme: normalizeThemeId(parsed.theme),
+        fontSize: clampFontSize(parsed.fontSize ?? DEFAULT_FONT_SIZE),
+      };
     }
   } catch { /* ignore */ }
-  return { theme: DEFAULT_THEME };
+  return { theme: DEFAULT_THEME, fontSize: DEFAULT_FONT_SIZE };
 }
 
 function savePreferences(prefs: UserPreferences): void {
@@ -216,6 +228,8 @@ function AppContent({
   onRefresh,
   onSelectTheme,
   theme,
+  fontSize,
+  onChangeFontSize,
 }: {
   metadata: ReviewMetadata;
   diffFiles: ParsedFileDiff[];
@@ -224,6 +238,8 @@ function AppContent({
   onRefresh: () => void;
   onSelectTheme: (id: ThemeId) => void;
   theme: ThemeId;
+  fontSize: number;
+  onChangeFontSize: (delta: number) => void;
 }): React.JSX.Element {
   const { viewMode, setViewMode, comments } = useReviewStore();
   const [viewType, setViewType] = useResponsiveViewType(viewMode as ViewType);
@@ -397,6 +413,15 @@ function AppContent({
                   ))}
                 </optgroup>
               </select>
+              <div className="font-size-control" role="group" aria-label="Diff font size">
+                <button className="btn toolbar-btn font-size-btn" onClick={() => onChangeFontSize(-1)} type="button" aria-label="Decrease diff font size" title="Decrease font size" disabled={fontSize <= MIN_FONT_SIZE}>
+                  A−
+                </button>
+                <span className="font-size-value" aria-live="polite" title="Diff font size">{fontSize}px</span>
+                <button className="btn toolbar-btn font-size-btn" onClick={() => onChangeFontSize(1)} type="button" aria-label="Increase diff font size" title="Increase font size" disabled={fontSize >= MAX_FONT_SIZE}>
+                  A+
+                </button>
+              </div>
               <button className="btn toolbar-btn toolbar-help-btn" onClick={() => setShowHelp(true)} type="button" title="Keyboard shortcuts (?)">
                 ?
               </button>
@@ -443,6 +468,7 @@ export function App(): React.JSX.Element {
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [theme, setTheme] = useState<ThemeId>(() => loadPreferences().theme);
+  const [fontSize, setFontSize] = useState<number>(() => loadPreferences().fontSize);
   const [view, setView] = useState<AppView>('review');
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
 
@@ -452,8 +478,9 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    savePreferences({ theme });
-  }, [theme]);
+    document.documentElement.style.setProperty('--diff-font-size', `${fontSize}px`);
+    savePreferences({ theme, fontSize });
+  }, [theme, fontSize]);
 
   const fetchData = useCallback(() => {
     setLoadState('loading');
@@ -511,6 +538,10 @@ export function App(): React.JSX.Element {
     setTheme(id);
   }, []);
 
+  const handleChangeFontSize = useCallback((delta: number) => {
+    setFontSize((prev) => clampFontSize(prev + delta));
+  }, []);
+
   if (loadState === 'loading') {
     return (
       <div className="app skeleton" role="status" aria-label="Loading">
@@ -550,6 +581,8 @@ export function App(): React.JSX.Element {
           onRefresh={handleRefresh}
           onSelectTheme={handleSelectTheme}
           theme={theme}
+          fontSize={fontSize}
+          onChangeFontSize={handleChangeFontSize}
         />
       )}
     </ReviewStoreProvider>

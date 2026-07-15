@@ -1380,6 +1380,27 @@ body {
   text-align: center;
 }
 
+/* ===== Diff Font Size Control ===== */
+.font-size-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.font-size-btn {
+  min-width: 30px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.font-size-value {
+  font-size: 0.72rem;
+  color: var(--color-text-subtle);
+  min-width: 30px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ===== Keyboard Shortcut Help Modal ===== */
 .shortcut-help-dialog {
   background: var(--color-panel);
