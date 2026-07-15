@@ -105,8 +105,16 @@ export interface ReviewSession {
   lastAccessedAt: string;
 }
 
+export type ThemeId =
+  | 'default-dark'
+  | 'default-light'
+  | 'catppuccin-latte'
+  | 'catppuccin-frappe'
+  | 'catppuccin-macchiato'
+  | 'catppuccin-mocha';
+
 export interface UserPreferences {
-  theme: 'dark' | 'light';
+  theme: ThemeId;
 }
 
 export interface FileTreeNode {

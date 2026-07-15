@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { ViewType } from 'react-diff-view';
-import type { ReviewMetadata, DiffResponse, ParsedFileDiff, UserPreferences, FinishResponse, FileChange, Comment } from '../../shared/types.js';
+import type { ReviewMetadata, DiffResponse, ParsedFileDiff, UserPreferences, FinishResponse, FileChange, Comment, ThemeId } from '../../shared/types.js';
+import { THEMES, DEFAULT_THEME, normalizeThemeId } from './themes.js';
 import { ReviewStoreProvider, useReviewStore } from './hooks/useReviewStore.js';
 import { DiffView } from './components/DiffView.js';
 import type { DiffViewHandle } from './components/DiffView.js';
@@ -36,9 +37,12 @@ function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => 
 function loadPreferences(): UserPreferences {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
-    if (raw) return JSON.parse(raw) as UserPreferences;
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<UserPreferences>;
+      return { theme: normalizeThemeId(parsed.theme) };
+    }
   } catch { /* ignore */ }
-  return { theme: 'dark' };
+  return { theme: DEFAULT_THEME };
 }
 
 function savePreferences(prefs: UserPreferences): void {
@@ -210,7 +214,7 @@ function AppContent({
   fileChanges,
   onFinish,
   onRefresh,
-  onToggleTheme,
+  onSelectTheme,
   theme,
 }: {
   metadata: ReviewMetadata;
@@ -218,8 +222,8 @@ function AppContent({
   fileChanges: FileChange[];
   onFinish: (data: SummaryData) => void;
   onRefresh: () => void;
-  onToggleTheme: () => void;
-  theme: 'dark' | 'light';
+  onSelectTheme: (id: ThemeId) => void;
+  theme: ThemeId;
 }): React.JSX.Element {
   const { viewMode, setViewMode, comments } = useReviewStore();
   const [viewType, setViewType] = useResponsiveViewType(viewMode as ViewType);
@@ -375,15 +379,24 @@ function AppContent({
               <button className="view-toggle" onClick={handleToggleView} type="button" title="Toggle view mode (d)">
                 {viewType === 'split' ? '⇔ Split' : '≡ Unified'}
               </button>
-              <button
-                className="btn theme-toggle-btn"
-                onClick={onToggleTheme}
-                type="button"
-                aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-                title="Toggle theme"
+              <select
+                className="theme-select"
+                value={theme}
+                onChange={(e) => onSelectTheme(e.target.value as ThemeId)}
+                aria-label="Select color theme"
+                title="Color theme"
               >
-                {theme === 'dark' ? '☀️' : '🌙'}
-              </button>
+                <optgroup label="Dark">
+                  {THEMES.filter((t) => t.mode === 'dark').map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Light">
+                  {THEMES.filter((t) => t.mode === 'light').map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </optgroup>
+              </select>
               <button className="btn toolbar-btn toolbar-help-btn" onClick={() => setShowHelp(true)} type="button" title="Keyboard shortcuts (?)">
                 ?
               </button>
@@ -429,7 +442,7 @@ export function App(): React.JSX.Element {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => loadPreferences().theme);
+  const [theme, setTheme] = useState<ThemeId>(() => loadPreferences().theme);
   const [view, setView] = useState<AppView>('review');
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
 
@@ -494,8 +507,8 @@ export function App(): React.JSX.Element {
     setView('review');
   }, []);
 
-  const handleToggleTheme = useCallback(() => {
-    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  const handleSelectTheme = useCallback((id: ThemeId) => {
+    setTheme(id);
   }, []);
 
   if (loadState === 'loading') {
@@ -535,7 +548,7 @@ export function App(): React.JSX.Element {
           fileChanges={metadata.files}
           onFinish={handleFinish}
           onRefresh={handleRefresh}
-          onToggleTheme={handleToggleTheme}
+          onSelectTheme={handleSelectTheme}
           theme={theme}
         />
       )}
