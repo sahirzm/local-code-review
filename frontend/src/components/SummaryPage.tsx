@@ -3,7 +3,7 @@ import type { Comment } from '../../../shared/types.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
 import { downloadMarkdown } from '../utils/client-markdown.js';
 
-const CLOSE_DELAY_SECONDS = 5;
+const CLOSE_DELAY_SECONDS = 3;
 
 interface SummaryPageProps {
   markdown: string;
