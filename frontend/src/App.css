@@ -1253,6 +1253,11 @@ body {
   flex-shrink: 0;
 }
 
+.tree-file-icon {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
 .tree-file-name {
   overflow: hidden;
   text-overflow: ellipsis;

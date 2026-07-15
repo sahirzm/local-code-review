@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import type { FileChange, FileTreeNode } from '../../../shared/types.js';
 import { buildFileTree } from '../utils/build-file-tree.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
+import { FileIcon } from '../utils/file-icon.js';
 
 type StatusFilter = 'all' | FileChange['status'];
 type QuickFilter = 'has-comments' | 'needs-review';
@@ -208,6 +209,7 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
           style={{ background: statusColors[node.status ?? 'modified'] }}
           aria-label={node.status}
         />
+        <FileIcon name={node.name} />
         <span className="tree-file-name">{node.name}</span>
         {node.isReviewed && <span className="tree-reviewed" aria-label="Reviewed">✓</span>}
         {node.commentCount > 0 && (
