@@ -7,15 +7,13 @@
     "local-review": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "npm run build:server && npm run build:frontend",
-    "dev": "node -e \"const{spawn}=require('child_process');const s=spawn('npx',['tsx','src/cli/index.ts','--no-open'],{stdio:'inherit'});const v=spawn('npx',['vite','--config','vite.config.ts','--open'],{stdio:'inherit'});process.on('SIGINT',()=>{s.kill();v.kill();process.exit()})\"",
-    "dev:server": "tsx src/cli/index.ts --no-open",
+    "build": "npm run build:frontend",
+    "dev": "vite --config vite.config.ts --open",
     "dev:frontend": "vite --config vite.config.ts --open",
     "test": "vitest run",
     "coverage": "vitest run --project unit --coverage --coverage.include=src/**",
     "test:browser:install": "playwright install chromium",
-    "build:frontend": "vite build",
-    "build:server": "tsc -p tsconfig.server.json && node -e \"const fs=require('fs');const f='dist/cli/index.js';const c=fs.readFileSync(f,'utf8');if(!c.startsWith('#!'))fs.writeFileSync(f,'#!/usr/bin/env node\\n'+c)\""
+    "build:frontend": "vite build"
   },
   "dependencies": {
     "@tanstack/react-virtual": "3.10.9",
