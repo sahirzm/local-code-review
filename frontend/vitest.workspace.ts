@@ -9,6 +9,7 @@ export default defineWorkspace([
     test: {
       name: 'unit',
       environment: 'jsdom',
+      setupFiles: ['./src/test/setup-unit.ts'],
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
       exclude: ['src/**/*.browser.test.tsx', 'node_modules/**', 'dist/**'],
     },
