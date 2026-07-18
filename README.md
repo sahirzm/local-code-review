@@ -41,11 +41,7 @@ Optional — install binary:
 cargo install --path .
 ```
 
-With TUI support:
-
-```bash
-cargo build --release --features tui
-```
+The terminal UI (`--tui`) is built in — no extra feature flag or build step is required.
 
 ## Usage
 
@@ -80,7 +76,7 @@ local-review --output review.md
 # Fetch before comparing
 local-review --fetch
 
-# Terminal TUI mode (requires --features tui)
+# Terminal TUI mode
 local-review --tui
 ```
 
@@ -108,7 +104,7 @@ Output goes to stdout; server logs go to stderr. This means `local-review > revi
 ```bash
 cargo build          # build
 cargo test           # run all tests
-cargo build --release --features tui  # release + TUI
+cargo build --release  # release build
 ```
 
 ## Tech Stack
@@ -116,8 +112,7 @@ cargo build --release --features tui  # release + TUI
 - **Language:** Rust
 - **Server:** Axum (tokio)
 - **Git:** git2 (libgit2 bindings)
-- **TUI:** ratatui + crossterm (optional)
-- **Syntax highlighting:** syntect (TUI only)
+- **TUI:** ratatui + crossterm
 - **Frontend:** React (served as static files, identical to TS version)
 
 ## Security
