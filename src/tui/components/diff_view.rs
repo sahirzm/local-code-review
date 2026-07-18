@@ -1,88 +1,130 @@
-use ratatui::{layout::Rect, style::{Color, Style}, text::{Line, Span, Text}, widgets::{Block, Paragraph}, Frame};
-use crate::tui::app::App;
-use crate::types::FileStatus;
+use ratatui::{
+    layout::Rect,
+    style::{Modifier, Style},
+    text::{Line, Span, Text},
+    widgets::{Block, Paragraph},
+    Frame,
+};
+
+use crate::tui::app::{App, DiffRow};
+use crate::tui::icons::UiGlyph;
+use crate::tui::syntax;
+use crate::types::{ChangeType, FileStatus};
 
 pub fn render_diff_view(frame: &mut Frame, app: &App, area: Rect) {
+    let theme = app.theme();
+
     if app.files.is_empty() {
         let p = Paragraph::new("No files changed")
-            .block(Block::bordered().title(" Diff "))
-            .centered();
+            .block(Block::bordered().title(" Diff ").border_style(Style::default().fg(theme.border)))
+            .style(Style::default().fg(theme.text_muted));
         frame.render_widget(p, area);
         return;
     }
 
-    let filtered = app.filtered_files();
-    let selected_idx = if !filtered.is_empty() {
-        let sidx = app.current_file_idx.min(filtered.len() - 1);
-        filtered.get(sidx).copied().unwrap_or(0)
-    } else {
-        0
+    let Some(idx) = app.selected_file_index() else {
+        return;
     };
-
-    let (fc, diff) = &app.files[selected_idx.min(app.files.len().saturating_sub(1))];
-    let reviewed = if app.is_reviewed(&fc.path) { " ✓ reviewed " } else { "" };
-
+    let (fc, diff) = &app.files[idx];
+    let reviewed = if app.is_reviewed(&fc.path) {
+        format!(" {} ", app.icons.ui(UiGlyph::Reviewed))
+    } else {
+        String::new()
+    };
     let title = format!(
-        " {} [{:?}] +{}/-{} {}",
+        " {} [{:?}] +{}/-{}{} ",
         fc.path, fc.status, fc.additions, fc.deletions, reviewed
     );
 
+    let block = Block::bordered()
+        .title(title)
+        .border_style(Style::default().fg(theme.border));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if diff.is_none() {
+        let msg = if fc.status == FileStatus::Deleted {
+            "File deleted"
+        } else {
+            "Binary or empty diff"
+        };
+        frame.render_widget(
+            Paragraph::new(msg).style(Style::default().fg(theme.text_muted)),
+            inner,
+        );
+        return;
+    }
+
+    let rows = app.diff_rows();
+    let highlighter = syntax::Highlighter::for_path(&fc.path, diff.as_ref().map_or(false, |d| d.is_large));
+    let viewport = inner.height as usize;
+
+    // Keep the cursor within the visible window.
+    let mut offset = app.scroll_offset;
+    if app.diff_cursor < offset {
+        offset = app.diff_cursor;
+    } else if viewport > 0 && app.diff_cursor >= offset + viewport {
+        offset = app.diff_cursor + 1 - viewport;
+    }
+
     let mut lines: Vec<Line> = Vec::new();
-
-    if let Some(d) = diff {
-        for hunk in &d.hunks {
-            lines.push(Line::from(Span::styled(
-                format!("@@ -{},{} +{},{} @@ {}",
-                    hunk.old_start, hunk.old_lines,
-                    hunk.new_start, hunk.new_lines,
-                    hunk.content),
-                Style::default().fg(Color::Cyan),
-            )));
-
-            for change in &hunk.changes {
-                let (prefix, color) = match change.change_type {
-                    crate::types::ChangeType::Insert => ("+", Color::Green),
-                    crate::types::ChangeType::Delete => ("-", Color::Red),
-                    crate::types::ChangeType::Normal => (" ", Color::Gray),
-                };
-                lines.push(Line::from(Span::styled(
-                    format!("{}{}", prefix, change.content),
-                    Style::default().fg(color),
-                )));
-            }
-        }
-    } else if fc.status == FileStatus::Deleted {
-        lines.push(Line::from("File deleted"));
-    } else {
-        lines.push(Line::from("Binary or empty diff"));
+    for (i, row) in rows.iter().enumerate().skip(offset).take(viewport) {
+        let is_cursor = i == app.diff_cursor;
+        lines.push(render_row(app, row, is_cursor, &highlighter));
     }
 
-    let comments_for_file: Vec<String> = app
-        .comments
-        .iter()
-        .filter(|c| c.file_path.as_deref() == Some(&fc.path))
-        .map(|c| {
-            let line_num = c.start_line.map(|l| format!("L{}", l)).unwrap_or_default();
-            let cat = match c.category {
-                crate::types::CommentCategory::Fix => "fix",
-                crate::types::CommentCategory::Question => "question",
-                crate::types::CommentCategory::Suggestion => "suggestion",
-                crate::types::CommentCategory::Nit => "nit",
+    frame.render_widget(Paragraph::new(Text::from(lines)), inner);
+}
+
+fn render_row<'a>(app: &App, row: &'a DiffRow, is_cursor: bool, hl: &syntax::Highlighter) -> Line<'a> {
+    let theme = app.theme();
+    match row {
+        DiffRow::HunkHeader(content) => Line::from(Span::styled(
+            content.clone(),
+            Style::default().fg(theme.accent).add_modifier(Modifier::DIM),
+        )),
+        DiffRow::Blank => Line::from(""),
+        DiffRow::Change {
+            change_type,
+            content,
+            side,
+            ..
+        } => {
+            let (prefix, base_bg) = match change_type {
+                ChangeType::Insert => ("+", Some(theme.diff_code_insert_bg)),
+                ChangeType::Delete => ("-", Some(theme.diff_code_delete_bg)),
+                ChangeType::Normal => (" ", None),
             };
-            format!("[{}] {} {}", cat, line_num, c.text)
-        })
-        .collect();
+            let bg = if is_cursor {
+                Some(theme.diff_code_selected_bg)
+            } else {
+                base_bg
+            };
+            let cursor_glyph = if is_cursor {
+                app.icons.ui(UiGlyph::Cursor)
+            } else {
+                " "
+            };
 
-    if !comments_for_file.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("── Comments ──", Style::default().fg(Color::Yellow))));
-        for c in &comments_for_file {
-            lines.push(Line::from(c.as_str()));
+            let mut spans: Vec<Span> = Vec::new();
+            let mut style = Style::default().fg(theme.text_muted);
+            if let Some(bg) = bg {
+                style = style.bg(bg);
+            }
+            spans.push(Span::styled(format!("{}{} ", cursor_glyph, prefix), style));
+
+            // Syntax-highlight the code portion, tinting spans by scope but
+            // preserving the diff-row background.
+            let base = Style::default().fg(theme.text);
+            let base = if let Some(bg) = bg { base.bg(bg) } else { base };
+            for (text, color) in hl.spans(content, &theme, *side) {
+                let mut s = base.fg(color);
+                if let Some(bg) = bg {
+                    s = s.bg(bg);
+                }
+                spans.push(Span::styled(text, s));
+            }
+            Line::from(spans)
         }
     }
-
-    let paragraph = Paragraph::new(Text::from(lines))
-        .block(Block::bordered().title(title));
-
-    frame.render_widget(paragraph, area);
 }

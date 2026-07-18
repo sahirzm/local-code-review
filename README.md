@@ -19,7 +19,11 @@ Local code review tool that exports AI-agent-friendly markdown. Rust port of the
 - Markdown export with code context for AI coding agents
 - Virtual scrolling for large diffs
 - Status bar with comment counts and review progress
-- Optional TUI mode (`--tui`) with terminal-native diff viewer
+- First-class TUI mode (`--tui`): syntax-highlighted diff viewer with a line
+  cursor, all four comment types (line/range/file/overall) plus edit & delete,
+  session persistence, 6 themes, adjustable diff context, and configurable icons
+- Shared preferences (theme, icons, diff context) in
+  `$XDG_CONFIG_HOME/local-code-review/config.yaml`, read by both TUI and web
 
 ## Prerequisites
 
@@ -96,8 +100,31 @@ Output goes to stdout; server logs go to stderr. This means `local-review > revi
 | `-o, --output <path>` | Override output file path | `<repo>-review.md` |
 | `--fetch` | Run `git fetch` before diffing | `false` |
 | `--tui` | Launch terminal UI instead of server+browser | `false` |
+| `-U, --context <N>` | Unified diff context lines (like `git -U<n>`); overrides config | `3` |
 | `-V, --version` | Print version and exit | — |
 | `--help` | Print usage and exit | — |
+
+### TUI keys
+
+`n`/`p` file · `↑`/`↓` line cursor · `j`/`k` comment · `c` line comment ·
+`v` set range anchor (then `c`) · `F` file comment · `O` overall · `e` edit ·
+`x`/`Del` delete · `r` reviewed · `s` sidebar · `d` split/unified · `t`/`T` theme ·
+`+`/`-` diff context · `?` help · `q` quit (saves session + exports markdown).
+
+### Configuration
+
+Shared preferences live in `$XDG_CONFIG_HOME/local-code-review/config.yaml`
+(falling back to `~/.config/local-code-review/config.yaml`):
+
+```yaml
+theme: default-dark        # default-dark | catppuccin-mocha | catppuccin-macchiato
+                           # | catppuccin-frappe | default-light | catppuccin-latte
+iconMode: nerdfont         # nerdfont | unicode | ascii
+diffContextLines: 3
+```
+
+A missing or malformed file falls back to defaults. The web UI reads these via
+`GET /api/v1/config`.
 
 ## Development
 

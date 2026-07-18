@@ -6,6 +6,7 @@ use axum::Router;
 use tokio::sync::Mutex;
 use tower_http::services::{ServeDir, ServeFile};
 
+use crate::config::Config;
 use crate::git::GitModule;
 use crate::types::{DiffResponse, ReviewMetadata};
 
@@ -24,6 +25,7 @@ pub struct ServerState {
     pub output_path: String,
     pub git: Arc<Mutex<GitModule>>,
     pub frontend_dir: Option<PathBuf>,
+    pub config: Config,
 }
 
 pub async fn start_server(
@@ -41,6 +43,7 @@ pub async fn start_server(
         output_path: state.output_path,
         git: state.git,
         shutdown: shutdown_clone,
+        config: state.config,
     };
 
     let api = routes::create_api_router(app_state);

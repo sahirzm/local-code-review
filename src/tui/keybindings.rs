@@ -7,7 +7,21 @@ pub enum Action {
     PrevFile,
     NextComment,
     PrevComment,
-    AddComment,
+    CursorDown,
+    CursorUp,
+    CommentLine,
+    CommentRange,
+    CommentFile,
+    CommentOverall,
+    SetRangeAnchor,
+    EditComment,
+    DeleteComment,
+    ToggleReviewed,
+    ToggleSidebar,
+    CycleTheme,
+    CycleThemeBack,
+    IncreaseContext,
+    DecreaseContext,
     ToggleViewMode,
     CloseForm,
     ToggleHelp,
@@ -16,37 +30,38 @@ pub enum Action {
 }
 
 pub fn handle_events(app: &mut App) -> std::io::Result<Action> {
+    // The comment popup owns raw input elsewhere; this path is normal mode only.
     if app.is_input_active() {
-        match event::read()? {
-            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Esc => return Ok(Action::CloseForm),
-                KeyCode::Char(c) => {
-                    app.push_input_char(c);
-                }
-                KeyCode::Backspace => {
-                    app.pop_input_char();
-                }
-                _ => {}
-            },
-            _ => {}
-        }
         return Ok(Action::None);
     }
 
     match event::read()? {
-        Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-            KeyCode::Char('q') => return Ok(Action::Quit),
-            KeyCode::Char('n') => return Ok(Action::NextFile),
-            KeyCode::Char('p') => return Ok(Action::PrevFile),
-            KeyCode::Char('j') => return Ok(Action::NextComment),
-            KeyCode::Char('k') => return Ok(Action::PrevComment),
-            KeyCode::Char('c') => return Ok(Action::AddComment),
-            KeyCode::Char('d') => return Ok(Action::ToggleViewMode),
-            KeyCode::Esc => return Ok(Action::CloseForm),
-            KeyCode::Char('?') => return Ok(Action::ToggleHelp),
-            _ => {}
-        },
-        _ => {}
+        Event::Key(key) if key.kind == KeyEventKind::Press => Ok(match key.code {
+            KeyCode::Char('q') => Action::Quit,
+            KeyCode::Char('n') => Action::NextFile,
+            KeyCode::Char('p') => Action::PrevFile,
+            KeyCode::Char('j') => Action::NextComment,
+            KeyCode::Char('k') => Action::PrevComment,
+            KeyCode::Down => Action::CursorDown,
+            KeyCode::Up => Action::CursorUp,
+            KeyCode::Char('c') => Action::CommentLine,
+            KeyCode::Char('v') => Action::SetRangeAnchor,
+            KeyCode::Char('R') => Action::CommentRange,
+            KeyCode::Char('F') => Action::CommentFile,
+            KeyCode::Char('O') => Action::CommentOverall,
+            KeyCode::Char('e') => Action::EditComment,
+            KeyCode::Char('x') | KeyCode::Delete => Action::DeleteComment,
+            KeyCode::Char('r') => Action::ToggleReviewed,
+            KeyCode::Char('s') => Action::ToggleSidebar,
+            KeyCode::Char('t') => Action::CycleTheme,
+            KeyCode::Char('T') => Action::CycleThemeBack,
+            KeyCode::Char('+') | KeyCode::Char('=') => Action::IncreaseContext,
+            KeyCode::Char('-') => Action::DecreaseContext,
+            KeyCode::Char('d') => Action::ToggleViewMode,
+            KeyCode::Esc => Action::CloseForm,
+            KeyCode::Char('?') => Action::ToggleHelp,
+            _ => Action::None,
+        }),
+        _ => Ok(Action::None),
     }
-    Ok(Action::None)
 }

@@ -53,6 +53,8 @@ pub struct CliOptions {
     pub fetch: bool,
     pub tui: bool,
     pub all: bool,
+    /// Resolved unified diff context lines (CLI `-U` > config > default 3).
+    pub context: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub frontend_dir: Option<String>,
 }

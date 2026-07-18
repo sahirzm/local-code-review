@@ -27,6 +27,7 @@ pub struct AppState {
     pub output_path: String,
     pub git: Arc<Mutex<GitModule>>,
     pub shutdown: Arc<Shutdown>,
+    pub config: crate::config::Config,
 }
 
 #[derive(Deserialize)]
@@ -38,6 +39,7 @@ struct SaveSessionBody {
 pub fn create_api_router(state: AppState) -> Router {
     Router::new()
         .route("/api/v1/health", get(health))
+        .route("/api/v1/config", get(get_config))
         .route("/api/v1/metadata", get(get_metadata))
         .route("/api/v1/diff", get(get_diff))
         .route("/api/v1/finish", post(post_finish))
@@ -49,6 +51,12 @@ pub fn create_api_router(state: AppState) -> Router {
 
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "ok" }))
+}
+
+/// Read-only view of the shared config so the web UI can seed theme/icon prefs
+/// from the same file the TUI uses. Serialized camelCase to match the frontend.
+async fn get_config(State(state): State<AppState>) -> Json<crate::config::Config> {
+    Json(state.config)
 }
 
 async fn get_metadata(State(state): State<AppState>) -> Json<ReviewMetadata> {
@@ -192,6 +200,7 @@ mod tests {
             output_path: String::new(),
             git: Arc::new(Mutex::new(git)),
             shutdown: Arc::new(Shutdown::new()),
+            config: crate::config::Config::default(),
         };
         (state, tmp)
     }
@@ -215,6 +224,20 @@ mod tests {
             .unwrap();
         assert_eq!(res.status().as_u16(), 200);
         assert_eq!(body_json(res).await["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_returns_shared_prefs() {
+        let (state, _tmp) = test_state();
+        let res = create_api_router(state)
+            .oneshot(Request::builder().uri("/api/v1/config").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status().as_u16(), 200);
+        let json = body_json(res).await;
+        assert_eq!(json["theme"], "default-dark");
+        assert_eq!(json["iconMode"], "nerdfont");
+        assert_eq!(json["diffContextLines"], 3);
     }
 
     #[tokio::test]

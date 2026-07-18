@@ -35,7 +35,10 @@ fn prompt_include_untracked(git: &git::GitModule) -> anyhow::Result<bool> {
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let options = cli::parse_args()?;
+    // Load shared config first so the CLI can fall back to its diff-context
+    // preference when `-U` is not passed.
+    let app_config = config::Config::load();
+    let options = cli::parse_args(app_config.diff_context_lines)?;
     let cwd = std::env::current_dir()?;
     let cwd_str = cwd.to_string_lossy().to_string();
 
@@ -56,15 +59,18 @@ async fn main() -> anyhow::Result<()> {
     let range = git::resolve_range::resolve_range(&options, &git).await?;
     eprintln!("Resolved range: mode={} args={:?}", range.mode, range.args);
 
+    // Captured here (outside any TUI terminal takeover) because it may prompt
+    // on stdin; reused by the TUI re-diff path.
+    let mut include_untracked = false;
     let raw_diff = match range.mode.as_str() {
-        "staged" => git.get_staged_diff()?,
-        "unstaged" => git.get_unstaged_diff()?,
-        "working" => git.get_working_diff()?,
-        "commits" => git.get_diff(&range.args[0], &range.args[1])?,
+        "staged" => git.get_staged_diff(options.context)?,
+        "unstaged" => git.get_unstaged_diff(options.context)?,
+        "working" => git.get_working_diff(options.context)?,
+        "commits" => git.get_diff(&range.args[0], &range.args[1], options.context)?,
         "all" => {
             let base = &range.args[0];
-            let include_untracked = prompt_include_untracked(&git)?;
-            git.get_diff_from_to_workdir(base, include_untracked)?
+            include_untracked = prompt_include_untracked(&git)?;
+            git.get_diff_from_to_workdir(base, include_untracked, options.context)?
         }
         _ => anyhow::bail!("Unknown range mode: {}", range.mode),
     };
@@ -113,13 +119,19 @@ async fn main() -> anyhow::Result<()> {
     let diff_data = types::DiffResponse { files: files.clone() };
 
     if options.tui {
-        let _ = tui::run_tui(
-            file_list,
-            files,
+        let _ = tui::run_tui(tui::TuiContext {
+            files: file_list,
+            parsed_diffs: files,
             head_ref,
-            repo_name,
             base_ref,
-        );
+            repo_name,
+            repo_path: cwd_str.clone(),
+            git,
+            range,
+            include_untracked,
+            context_lines: options.context,
+            config: app_config,
+        });
         return Ok(());
     }
 
@@ -131,6 +143,7 @@ async fn main() -> anyhow::Result<()> {
         output_path,
         git: Arc::new(Mutex::new(git)),
         frontend_dir: options.frontend_dir.clone().map(std::path::PathBuf::from),
+        config: app_config,
     };
 
     let (actual_port, shutdown) = server::start_server(server_state, options.port).await?;
@@ -155,6 +168,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 pub mod cli;
+pub mod config;
 pub mod git;
 pub mod output;
 pub mod server;

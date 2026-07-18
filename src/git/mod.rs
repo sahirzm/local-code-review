@@ -117,32 +117,38 @@ impl GitModule {
         Ok(String::from_utf8(output)?)
     }
 
-    pub fn get_diff(&self, commit1: &str, commit2: &str) -> anyhow::Result<String> {
+    pub fn get_diff(&self, commit1: &str, commit2: &str, context_lines: u32) -> anyhow::Result<String> {
         let t1 = self.repo().revparse_single(commit1)?.peel_to_tree().ok();
         let t2 = self.repo().revparse_single(commit2)?.peel_to_tree().ok();
+        let mut opts = DiffOptions::new();
+        opts.context_lines(context_lines);
         let diff = self
             .repo()
-            .diff_tree_to_tree(t1.as_ref(), t2.as_ref(), None)?;
+            .diff_tree_to_tree(t1.as_ref(), t2.as_ref(), Some(&mut opts))?;
         Self::diff_to_string(self.repo(), diff)
     }
 
-    pub fn get_staged_diff(&self) -> anyhow::Result<String> {
+    pub fn get_staged_diff(&self, context_lines: u32) -> anyhow::Result<String> {
         let head_tree = self.repo().head()?.peel_to_tree().ok();
-        let diff = self.repo().diff_tree_to_index(head_tree.as_ref(), None, None)?;
+        let mut opts = DiffOptions::new();
+        opts.context_lines(context_lines);
+        let diff = self.repo().diff_tree_to_index(head_tree.as_ref(), None, Some(&mut opts))?;
         Self::diff_to_string(self.repo(), diff)
     }
 
-    pub fn get_unstaged_diff(&self) -> anyhow::Result<String> {
+    pub fn get_unstaged_diff(&self, context_lines: u32) -> anyhow::Result<String> {
         let mut opts = DiffOptions::new();
         opts.include_untracked(false);
+        opts.context_lines(context_lines);
         let diff = self.repo().diff_index_to_workdir(None, Some(&mut opts))?;
         Self::diff_to_string(self.repo(), diff)
     }
 
-    pub fn get_working_diff(&self) -> anyhow::Result<String> {
+    pub fn get_working_diff(&self, context_lines: u32) -> anyhow::Result<String> {
         let head_tree = self.repo().head()?.peel_to_tree().ok();
         let mut opts = DiffOptions::new();
         opts.include_untracked(false);
+        opts.context_lines(context_lines);
         let diff = self
             .repo()
             .diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut opts))?;
@@ -171,6 +177,7 @@ impl GitModule {
         &self,
         base: &str,
         include_untracked: bool,
+        context_lines: u32,
     ) -> anyhow::Result<String> {
         let base_tree = self
             .repo()
@@ -180,7 +187,8 @@ impl GitModule {
         let mut opts = DiffOptions::new();
         opts.include_untracked(include_untracked)
             .recurse_untracked_dirs(include_untracked)
-            .show_untracked_content(include_untracked);
+            .show_untracked_content(include_untracked)
+            .context_lines(context_lines);
         let diff = self
             .repo()
             .diff_tree_to_workdir_with_index(Some(&base_tree), Some(&mut opts))?;
@@ -272,6 +280,7 @@ impl GitModule {
 mod tests {
     use super::*;
     use crate::git::diff_parser::parse_diff;
+    use crate::types::ChangeType;
     use std::fs;
     use std::path::Path;
 
@@ -323,7 +332,7 @@ mod tests {
         // causing parse_diff to count 0 additions/deletions.
         let fx = fixture();
         fs::write(fx.path.join("a.txt"), "one\nTWO\nthree\nfour\n").unwrap();
-        let raw = fx.git.get_working_diff().unwrap();
+        let raw = fx.git.get_working_diff(3).unwrap();
         assert!(
             raw.lines().any(|l| l.starts_with('+')),
             "diff should contain '+' lines, got:\n{}",
@@ -360,7 +369,7 @@ mod tests {
         let fx = fixture();
         fs::write(fx.path.join("untracked.txt"), "new file\n").unwrap();
         fs::write(fx.path.join("a.txt"), "one\nTWO\nthree\n").unwrap();
-        let raw = fx.git.get_diff_from_to_workdir(&fx.base, false).unwrap();
+        let raw = fx.git.get_diff_from_to_workdir(&fx.base, false, 3).unwrap();
         let parsed = parse_diff(&raw);
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].new_path, "a.txt");
@@ -370,7 +379,7 @@ mod tests {
     fn diff_from_to_workdir_includes_untracked_when_requested() {
         let fx = fixture();
         fs::write(fx.path.join("untracked.txt"), "new content\n").unwrap();
-        let raw = fx.git.get_diff_from_to_workdir(&fx.base, true).unwrap();
+        let raw = fx.git.get_diff_from_to_workdir(&fx.base, true, 3).unwrap();
         let parsed = parse_diff(&raw);
         let names: Vec<&str> = parsed.iter().map(|f| f.new_path.as_str()).collect();
         assert!(
@@ -403,7 +412,7 @@ mod tests {
         idx.add_path(Path::new("staged.txt")).unwrap();
         idx.write().unwrap();
 
-        let raw = fx.git.get_diff_from_to_workdir(&fx.base, false).unwrap();
+        let raw = fx.git.get_diff_from_to_workdir(&fx.base, false, 3).unwrap();
         let parsed = parse_diff(&raw);
         let names: std::collections::HashSet<&str> =
             parsed.iter().map(|f| f.new_path.as_str()).collect();
@@ -421,10 +430,47 @@ mod tests {
         idx.add_path(Path::new("a.txt")).unwrap();
         idx.write().unwrap();
 
-        let raw = fx.git.get_staged_diff().unwrap();
+        let raw = fx.git.get_staged_diff(3).unwrap();
         let parsed = parse_diff(&raw);
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].additions, 1);
         assert_eq!(parsed[0].deletions, 0);
+    }
+
+    #[test]
+    fn larger_context_yields_more_normal_lines() {
+        // A file with plenty of unchanged lines around a single edit: a wider
+        // context window must surface more surrounding (Normal) lines.
+        let fx = fixture();
+        let repo = git2::Repository::open(&fx.path).unwrap();
+        let mut body = String::new();
+        for i in 0..40 {
+            body.push_str(&format!("line {}\n", i));
+        }
+        fs::write(fx.path.join("big.txt"), &body).unwrap();
+        commit_all(&repo, "add big file");
+
+        // Edit a single line in the middle.
+        let edited = body.replace("line 20\n", "line 20 CHANGED\n");
+        fs::write(fx.path.join("big.txt"), &edited).unwrap();
+
+        let count_normal = |ctx: u32| -> usize {
+            let raw = fx.git.get_working_diff(ctx).unwrap();
+            parse_diff(&raw)
+                .iter()
+                .flat_map(|f| f.hunks.iter())
+                .flat_map(|h| h.changes.iter())
+                .filter(|c| c.change_type == ChangeType::Normal)
+                .count()
+        };
+
+        let narrow = count_normal(1);
+        let wide = count_normal(6);
+        assert!(
+            wide > narrow,
+            "expected more context lines with -U6 ({}) than -U1 ({})",
+            wide,
+            narrow
+        );
     }
 }

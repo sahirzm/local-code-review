@@ -61,6 +61,10 @@ pub struct Cli {
     #[arg(long = "tui", default_value_t = false)]
     pub tui: bool,
 
+    /// Unified diff context lines (like `git -U<n>`); overrides the config file
+    #[arg(short = 'U', long = "context", value_name = "N")]
+    pub context: Option<u32>,
+
     /// Review everything since last pushed commit, including staged, unstaged, and (optionally) untracked files
     #[arg(long = "all", default_value_t = false)]
     pub all: bool,
@@ -70,11 +74,14 @@ pub struct Cli {
     pub frontend_dir: Option<String>,
 }
 
-pub fn parse_args() -> anyhow::Result<CliOptions> {
-    cli_to_options(Cli::parse())
+/// Parse argv into `CliOptions`. `default_context` (from the shared config)
+/// is used only when `-U/--context` is absent, so precedence is
+/// CLI flag > config file > built-in default.
+pub fn parse_args(default_context: u32) -> anyhow::Result<CliOptions> {
+    cli_to_options(Cli::parse(), default_context)
 }
 
-fn cli_to_options(cli: Cli) -> anyhow::Result<CliOptions> {
+fn cli_to_options(cli: Cli, default_context: u32) -> anyhow::Result<CliOptions> {
     let mode_flags = [cli.staged, cli.unstaged, cli.working, cli.all]
         .iter()
         .filter(|&&x| x)
@@ -108,6 +115,7 @@ fn cli_to_options(cli: Cli) -> anyhow::Result<CliOptions> {
         fetch: cli.fetch,
         tui: cli.tui,
         all: cli.all,
+        context: cli.context.unwrap_or(default_context),
         frontend_dir: cli.frontend_dir,
     })
 }
@@ -135,7 +143,7 @@ mod tests {
 
     fn parse(args: &[&str]) -> anyhow::Result<CliOptions> {
         let cli = Cli::try_parse_from(std::iter::once(&"local-review").chain(args.iter()))?;
-        cli_to_options(cli)
+        cli_to_options(cli, 3)
     }
 
     #[test]
@@ -274,6 +282,21 @@ mod tests {
         let opts = parse(&["--fetch", "--port", "3000"]).unwrap();
         assert!(opts.fetch);
         assert_eq!(opts.port, 3000);
+    }
+
+    #[test]
+    fn context_defaults_to_provided_fallback() {
+        // No -U flag → uses the config-provided default.
+        let cli = Cli::try_parse_from(["local-review"]).unwrap();
+        assert_eq!(cli_to_options(cli, 5).unwrap().context, 5);
+    }
+
+    #[test]
+    fn context_flag_overrides_fallback() {
+        let cli = Cli::try_parse_from(["local-review", "-U", "8"]).unwrap();
+        assert_eq!(cli_to_options(cli, 3).unwrap().context, 8);
+        let cli = Cli::try_parse_from(["local-review", "--context", "0"]).unwrap();
+        assert_eq!(cli_to_options(cli, 3).unwrap().context, 0);
     }
 
     #[test]
