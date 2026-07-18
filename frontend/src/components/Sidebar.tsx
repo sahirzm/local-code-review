@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { PanelLeftClose, PanelLeftOpen, ChevronRight, ChevronDown, MessageSquare, Circle, Check } from 'lucide-react';
 import type { FileChange, FileTreeNode } from '../../../shared/types.js';
 import { buildFileTree } from '../utils/build-file-tree.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
@@ -65,7 +66,7 @@ export function Sidebar({ files, onFileClick, activeFile }: SidebarProps): React
           aria-label="Expand sidebar"
           title="Expand sidebar"
         >
-          ▶
+          <PanelLeftOpen size={16} aria-hidden="true" />
         </button>
       </aside>
     );
@@ -86,7 +87,7 @@ export function Sidebar({ files, onFileClick, activeFile }: SidebarProps): React
           aria-label="Collapse sidebar"
           title="Collapse sidebar"
         >
-          ◀
+          <PanelLeftClose size={16} aria-hidden="true" />
         </button>
       </div>
 
@@ -117,14 +118,14 @@ export function Sidebar({ files, onFileClick, activeFile }: SidebarProps): React
             className={`filter-pill ${quickFilters.has('has-comments') ? 'filter-pill-active' : ''}`}
             onClick={() => toggleQuickFilter('has-comments')}
           >
-            💬 Has comments
+            <MessageSquare size={12} aria-hidden="true" /> Has comments
           </button>
           <button
             type="button"
             className={`filter-pill ${quickFilters.has('needs-review') ? 'filter-pill-active' : ''}`}
             onClick={() => toggleQuickFilter('needs-review')}
           >
-            ○ Needs review
+            <Circle size={12} aria-hidden="true" /> Needs review
           </button>
         </div>
       </div>
@@ -176,7 +177,7 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
           type="button"
           style={{ paddingLeft: `${depth * 14 + 10}px` }}
         >
-          <span className="tree-icon" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+          <span className="tree-icon" aria-hidden="true">{expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
           <span className="tree-dir-name">{node.name}/</span>
         </button>
         {expanded && node.children && (
@@ -211,7 +212,7 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
         />
         <FileIcon name={node.name} />
         <span className="tree-file-name">{node.name}</span>
-        {node.isReviewed && <span className="tree-reviewed" aria-label="Reviewed">✓</span>}
+        {node.isReviewed && <Check className="tree-reviewed" size={13} aria-label="Reviewed" />}
         {node.commentCount > 0 && (
           <span className="tree-comment-count" aria-label={`${node.commentCount} comments`}>
             {node.commentCount}

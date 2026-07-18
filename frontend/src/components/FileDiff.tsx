@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { ChevronRight, ChevronDown, Check, Circle, MessageSquare, MessageSquarePlus } from 'lucide-react';
 import { Diff, Hunk, Decoration, tokenize, markEdits, getChangeKey } from 'react-diff-view';
 import type { ViewType, HunkTokens, EventMap, ChangeEventArgs } from 'react-diff-view';
 import { refractor } from 'refractor';
@@ -358,13 +359,15 @@ function FileHeader({ file, filePath, collapsed, onToggle, commentCount, onAddFi
   return (
     <div className="file-header-row">
       <button className="file-header" onClick={onToggle} aria-expanded={!collapsed} type="button">
-        <span className="collapse-icon" aria-hidden="true">{collapsed ? '▶' : '▼'}</span>
+        <span className="collapse-icon" aria-hidden="true">
+          {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+        </span>
         <span className={`badge badge-${file.status}`}>{file.status}</span>
         <span className="file-path">{filePath}</span>
-        {reviewed && <span className="reviewed-badge" aria-label="Reviewed">✓</span>}
+        {reviewed && <Check className="reviewed-badge" size={14} aria-label="Reviewed" />}
         {commentCount > 0 && (
           <span className="comment-count-badge" aria-label={`${commentCount} comments`}>
-            💬 {commentCount}
+            <MessageSquare size={12} aria-hidden="true" /> {commentCount}
           </span>
         )}
         <span className="line-counts">
@@ -379,7 +382,7 @@ function FileHeader({ file, filePath, collapsed, onToggle, commentCount, onAddFi
         aria-label={reviewed ? 'Unmark as reviewed' : 'Mark as reviewed'}
         title={reviewed ? 'Unmark as reviewed' : 'Mark as reviewed'}
       >
-        {reviewed ? '✓' : '○'}
+        {reviewed ? <Check size={15} aria-hidden="true" /> : <Circle size={15} aria-hidden="true" />}
       </button>
       {onAddFileComment && (
         <button
@@ -389,7 +392,7 @@ function FileHeader({ file, filePath, collapsed, onToggle, commentCount, onAddFi
           aria-label="Add file-level comment"
           title="Add file-level comment"
         >
-          💬+
+          <MessageSquarePlus size={15} aria-hidden="true" />
         </button>
       )}
     </div>

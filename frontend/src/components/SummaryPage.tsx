@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { Download, Copy, Check, ArrowLeft, X } from 'lucide-react';
 import type { Comment } from '../../../shared/types.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
 import { downloadMarkdown } from '../utils/client-markdown.js';
@@ -97,16 +98,18 @@ export function SummaryPage({ markdown, outputPath, csrfToken, onContinue }: Sum
 
       <div className="summary-actions">
         <button className="btn btn-download" onClick={handleDownload} type="button">
-          Download markdown
+          <Download size={15} aria-hidden="true" /> Download markdown
         </button>
         <button className="btn btn-copy" onClick={handleCopy} type="button">
-          {copied ? '✓ Copied!' : 'Copy markdown'}
+          {copied
+            ? <><Check size={15} aria-hidden="true" /> Copied!</>
+            : <><Copy size={15} aria-hidden="true" /> Copy markdown</>}
         </button>
         <button className="btn btn-continue" onClick={onContinue} type="button">
-          Continue reviewing
+          <ArrowLeft size={15} aria-hidden="true" /> Continue reviewing
         </button>
         <button className="btn btn-close" onClick={handleClose} type="button">
-          Close
+          <X size={15} aria-hidden="true" /> Close
         </button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, type KeyboardEvent, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import type { Comment } from '../../../shared/types.js';
 
 const MAX_CHARS = 2000;
@@ -71,7 +72,14 @@ export function CommentForm({
   const remaining = MAX_CHARS - text.length;
 
   return (
-    <div className="comment-form" role="form" aria-label={mode === 'create' ? 'Add comment' : 'Edit comment'}>
+    <motion.div
+      className="comment-form"
+      role="form"
+      aria-label={mode === 'create' ? 'Add comment' : 'Edit comment'}
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+    >
       <div className="comment-form-categories" role="group" aria-label="Comment category">
         {CATEGORIES.map((cat) => (
           <button
@@ -114,6 +122,6 @@ export function CommentForm({
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

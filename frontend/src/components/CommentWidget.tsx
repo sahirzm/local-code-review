@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { motion } from 'motion/react';
+import { Pencil, Trash2 } from 'lucide-react';
 import type { Comment } from '../../../shared/types.js';
 import { CommentForm, renderTextWithCode } from './CommentForm.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
@@ -69,7 +71,13 @@ export function CommentWidget({ comment, isActive, scrollDirection }: CommentWid
         : null;
 
   return (
-    <div className={`comment-widget${isActive ? ' comment-widget-active' : ''}`} ref={widgetRef}>
+    <motion.div
+      className={`comment-widget${isActive ? ' comment-widget-active' : ''}`}
+      ref={widgetRef}
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+    >
       <div className="comment-widget-header">
         <span className={`category-badge category-badge-${comment.category}`}>
           {comment.category}
@@ -78,14 +86,14 @@ export function CommentWidget({ comment, isActive, scrollDirection }: CommentWid
         <span className="comment-time">{formatTime(comment.createdAt)}</span>
         <div className="comment-widget-actions">
           <button type="button" className="btn-icon" onClick={() => setEditing(true)} aria-label="Edit comment">
-            ✏️
+            <Pencil size={14} aria-hidden="true" />
           </button>
           <button type="button" className="btn-icon" onClick={() => deleteComment(comment.id)} aria-label="Delete comment">
-            🗑️
+            <Trash2 size={14} aria-hidden="true" />
           </button>
         </div>
       </div>
       <div className="comment-widget-text">{renderTextWithCode(comment.text)}</div>
-    </div>
+    </motion.div>
   );
 }

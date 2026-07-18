@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import {
+  Trash2, Check, MessageSquarePlus, RefreshCw, Columns2, AlignJustify,
+  ChevronLeft, ChevronRight, HelpCircle, X, AlertTriangle,
+} from 'lucide-react';
+import { Toaster, toast } from 'sonner';
 import type { ViewType } from 'react-diff-view';
+import { Modal } from './components/ui/Modal.js';
+import { TooltipProvider, Tooltip } from './components/ui/Tooltip.js';
 import type { ReviewMetadata, DiffResponse, ParsedFileDiff, UserPreferences, FinishResponse, FileChange, Comment, ThemeId } from '../../shared/types.js';
 import { THEMES, DEFAULT_THEME, normalizeThemeId } from './themes.js';
 import { ReviewStoreProvider, useReviewStore } from './hooks/useReviewStore.js';
@@ -27,20 +34,6 @@ const DEFAULT_FONT_SIZE = 13;
 function clampFontSize(size: number): number {
   if (!Number.isFinite(size)) return DEFAULT_FONT_SIZE;
   return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(size)));
-}
-
-function ErrorToast({ message, onDismiss }: { message: string; onDismiss: () => void }): React.JSX.Element {
-  useEffect(() => {
-    const timer = setTimeout(onDismiss, 5000);
-    return () => clearTimeout(timer);
-  }, [onDismiss]);
-
-  return (
-    <div className="error-toast" role="alert">
-      <span>{message}</span>
-      <button type="button" onClick={onDismiss} aria-label="Dismiss">✕</button>
-    </div>
-  );
 }
 
 function loadPreferences(): UserPreferences {
@@ -89,19 +82,15 @@ function DiscardButton(): React.JSX.Element | null {
   return (
     <>
       <button className="btn-discard" onClick={() => setShowConfirm(true)} type="button" title="Discard review">
-        🗑 Discard
+        <Trash2 size={14} aria-hidden="true" /> Discard
       </button>
-      {showConfirm && (
-        <div className="discard-overlay" role="dialog" aria-modal="true" aria-label="Confirm discard">
-          <div className="discard-dialog">
-            <p>This will delete all {comments.length} comment{comments.length !== 1 ? 's' : ''} and reset review status. Are you sure?</p>
-            <div className="discard-dialog-actions">
-              <button className="btn btn-cancel" onClick={() => setShowConfirm(false)} type="button">Cancel</button>
-              <button className="btn btn-danger" onClick={() => { discardReview(); setShowConfirm(false); }} type="button">Discard</button>
-            </div>
-          </div>
+      <Modal open={showConfirm} onOpenChange={setShowConfirm} ariaLabel="Confirm discard" dialogClassName="discard-dialog">
+        <p>This will delete all {comments.length} comment{comments.length !== 1 ? 's' : ''} and reset review status. Are you sure?</p>
+        <div className="discard-dialog-actions">
+          <button className="btn btn-cancel" onClick={() => setShowConfirm(false)} type="button">Cancel</button>
+          <button className="btn btn-danger" onClick={() => { discardReview(); setShowConfirm(false); }} type="button">Discard</button>
         </div>
-      )}
+      </Modal>
     </>
   );
 }
@@ -149,52 +138,51 @@ function DoneButton({ metadata, onFinish }: { metadata: ReviewMetadata; onFinish
   return (
     <>
       <button className="btn btn-done" onClick={() => setShowConfirm(true)} type="button">
-        ✓ Done
+        <Check size={15} aria-hidden="true" /> Done
       </button>
-      {showConfirm && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Export confirmation">
-          <div className="modal-dialog">
-            <h2>Export {comments.length} comment{comments.length !== 1 ? 's' : ''} to markdown?</h2>
-            <p className="modal-detail">
-              {comments.length} comment{comments.length !== 1 ? 's' : ''} across {fileCount} file{fileCount !== 1 ? 's' : ''}
-            </p>
-            {exportError && <p className="export-error" role="alert">{exportError}</p>}
-            <div className="modal-actions">
-              <button className="btn btn-cancel" onClick={() => { setShowConfirm(false); setExportError(''); setExporting(false); }} type="button" disabled={exporting}>
-                Cancel
-              </button>
-              <button className="btn btn-submit" onClick={handleExport} type="button" disabled={exporting}>
-                {exporting ? 'Exporting...' : 'Export'}
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={showConfirm}
+        onOpenChange={(o) => { if (!o) { setExportError(''); setExporting(false); } setShowConfirm(o); }}
+        ariaLabel="Export confirmation"
+        dialogClassName="modal-dialog"
+      >
+        <h2>Export {comments.length} comment{comments.length !== 1 ? 's' : ''} to markdown?</h2>
+        <p className="modal-detail">
+          {comments.length} comment{comments.length !== 1 ? 's' : ''} across {fileCount} file{fileCount !== 1 ? 's' : ''}
+        </p>
+        {exportError && <p className="export-error" role="alert">{exportError}</p>}
+        <div className="modal-actions">
+          <button className="btn btn-cancel" onClick={() => { setShowConfirm(false); setExportError(''); setExporting(false); }} type="button" disabled={exporting}>
+            Cancel
+          </button>
+          <button className="btn btn-submit" onClick={handleExport} type="button" disabled={exporting}>
+            {exporting ? 'Exporting...' : 'Export'}
+          </button>
         </div>
-      )}
+      </Modal>
     </>
   );
 }
 
-function ShortcutHelpModal({ onClose }: { onClose: () => void }): React.JSX.Element {
+function ShortcutHelpModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }): React.JSX.Element {
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onClick={onClose}>
-      <div className="shortcut-help-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="shortcut-help-header">
-          <h2>Keyboard Shortcuts</h2>
-          <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-        <table className="shortcut-table">
-          <tbody>
-            {SHORTCUT_LIST.map((s) => (
-              <tr key={s.key}>
-                <td><kbd>{s.key}</kbd></td>
-                <td>{s.description}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="shortcut-help-note">Shortcuts are disabled when typing in a text field.</p>
+    <Modal open={open} onOpenChange={onOpenChange} ariaLabel="Keyboard shortcuts" dialogClassName="shortcut-help-dialog">
+      <div className="shortcut-help-header">
+        <h2>Keyboard Shortcuts</h2>
+        <button type="button" className="btn-icon" onClick={() => onOpenChange(false)} aria-label="Close"><X size={16} aria-hidden="true" /></button>
       </div>
-    </div>
+      <table className="shortcut-table">
+        <tbody>
+          {SHORTCUT_LIST.map((s) => (
+            <tr key={s.key}>
+              <td><kbd>{s.key}</kbd></td>
+              <td>{s.description}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="shortcut-help-note">Shortcuts are disabled when typing in a text field.</p>
+    </Modal>
   );
 }
 
@@ -360,10 +348,11 @@ function AppContent({
   }, [onRefresh]);
 
   return (
+    <TooltipProvider>
     <div className="app app-with-sidebar">
       {quota.isNearQuota && (
         <div className="quota-warning" role="alert">
-          ⚠️ localStorage is {quota.usagePercent}% full. Consider discarding old reviews.
+          <AlertTriangle size={14} aria-hidden="true" /> localStorage is {quota.usagePercent}% full. Consider discarding old reviews.
         </div>
       )}
       <header className="header">
@@ -375,25 +364,27 @@ function AppContent({
           <div className="toolbar" role="toolbar" aria-label="Review toolbar">
             <div className="toolbar-group">
               <button className="btn toolbar-btn" onClick={() => navigateComment(-1)} type="button" title="Previous comment (k)" disabled={sortedComments.length === 0 || isFirstComment}>
-                ← Comment
+                <ChevronLeft size={14} aria-hidden="true" /> Comment
               </button>
               <button className="btn toolbar-btn" onClick={() => navigateComment(1)} type="button" title="Next comment (j)" disabled={sortedComments.length === 0 || isLastComment}>
-                Comment →
+                Comment <ChevronRight size={14} aria-hidden="true" />
               </button>
             </div>
             <div className="toolbar-separator" />
             <div className="toolbar-group">
               <button className="btn toolbar-btn" onClick={handleAddOverallComment} type="button" title="Add overall comment (c)">
-                💬 Comment
+                <MessageSquarePlus size={14} aria-hidden="true" /> Comment
               </button>
               <button className="btn toolbar-btn" onClick={handleRefresh} type="button" title="Refresh diff">
-                🔄 Refresh
+                <RefreshCw size={14} aria-hidden="true" /> Refresh
               </button>
             </div>
             <div className="toolbar-separator" />
             <div className="toolbar-group">
               <button className="view-toggle" onClick={handleToggleView} type="button" title="Toggle view mode (d)">
-                {viewType === 'split' ? '⇔ Split' : '≡ Unified'}
+                {viewType === 'split'
+                  ? <><Columns2 size={14} aria-hidden="true" /> Split</>
+                  : <><AlignJustify size={14} aria-hidden="true" /> Unified</>}
               </button>
               <select
                 className="theme-select"
@@ -422,9 +413,11 @@ function AppContent({
                   A+
                 </button>
               </div>
-              <button className="btn toolbar-btn toolbar-help-btn" onClick={() => setShowHelp(true)} type="button" title="Keyboard shortcuts (?)">
-                ?
-              </button>
+              <Tooltip label="Keyboard shortcuts (?)">
+                <button className="btn toolbar-btn toolbar-help-btn" onClick={() => setShowHelp(true)} type="button" aria-label="Keyboard shortcuts">
+                  <HelpCircle size={15} aria-hidden="true" />
+                </button>
+              </Tooltip>
             </div>
             <div className="toolbar-separator" />
             <div className="toolbar-group">
@@ -442,22 +435,19 @@ function AppContent({
         </div>
       </div>
       <StatusBar totalFiles={fileChanges.length} />
-      {showHelp && <ShortcutHelpModal onClose={() => setShowHelp(false)} />}
-      {showRefreshWarn && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Refresh warning">
-          <div className="modal-dialog">
-            <h2>Refresh diff?</h2>
-            <p className="modal-detail">
-              Line numbers may shift. Comments may become misaligned.
-            </p>
-            <div className="modal-actions">
-              <button className="btn btn-cancel" onClick={() => setShowRefreshWarn(false)} type="button">Cancel</button>
-              <button className="btn btn-submit" onClick={confirmRefresh} type="button">Refresh</button>
-            </div>
-          </div>
+      <ShortcutHelpModal open={showHelp} onOpenChange={setShowHelp} />
+      <Modal open={showRefreshWarn} onOpenChange={setShowRefreshWarn} ariaLabel="Refresh warning" dialogClassName="modal-dialog">
+        <h2>Refresh diff?</h2>
+        <p className="modal-detail">
+          Line numbers may shift. Comments may become misaligned.
+        </p>
+        <div className="modal-actions">
+          <button className="btn btn-cancel" onClick={() => setShowRefreshWarn(false)} type="button">Cancel</button>
+          <button className="btn btn-submit" onClick={confirmRefresh} type="button">Refresh</button>
         </div>
-      )}
+      </Modal>
     </div>
+    </TooltipProvider>
   );
 }
 
@@ -466,7 +456,6 @@ export function App(): React.JSX.Element {
   const [diffFiles, setDiffFiles] = useState<ParsedFileDiff[] | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState('');
-  const [toast, setToast] = useState('');
   const [theme, setTheme] = useState<ThemeId>(() => loadPreferences().theme);
   const [fontSize, setFontSize] = useState<number>(() => loadPreferences().fontSize);
   const [view, setView] = useState<AppView>('review');
@@ -521,7 +510,7 @@ export function App(): React.JSX.Element {
         setDiffFiles(diff.files ?? []);
       })
       .catch((err: Error) => {
-        setToast(`Refresh failed: ${err.message}`);
+        toast.error('Refresh failed', { description: err.message });
       });
   }, []);
 
@@ -564,7 +553,12 @@ export function App(): React.JSX.Element {
 
   return (
     <ReviewStoreProvider metadata={metadata}>
-      {toast && <ErrorToast message={toast} onDismiss={() => setToast('')} />}
+      <Toaster
+        position="top-right"
+        theme={THEMES.find((t) => t.id === theme)?.mode ?? 'dark'}
+        richColors
+        closeButton
+      />
       {view === 'summary' && summaryData ? (
         <SummaryPage
           markdown={summaryData.markdown}
