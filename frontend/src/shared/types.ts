@@ -115,10 +115,32 @@ export type ThemeId =
   | 'catppuccin-macchiato'
   | 'catppuccin-mocha';
 
+/** Selectable code (monospace) font stacks; see fonts.ts for the resolved CSS. */
+export type CodeFontId =
+  | 'system-mono'
+  | 'jetbrains-mono'
+  | 'fira-code'
+  | 'sf-mono'
+  | 'source-code-pro'
+  | 'ibm-plex-mono'
+  | 'menlo-consolas';
+
+/** Selectable UI (sans-serif) font stacks; see fonts.ts for the resolved CSS. */
+export type UiFontId =
+  | 'system-sans'
+  | 'inter'
+  | 'roboto'
+  | 'segoe-ui'
+  | 'helvetica';
+
 export interface UserPreferences {
   theme: ThemeId;
   /** Diff text size in px. */
   fontSize: number;
+  /** Monospace font used for diff code and other code UI. */
+  codeFont: CodeFontId;
+  /** Sans-serif font used for the app chrome. */
+  uiFont: UiFontId;
 }
 
 export interface FileTreeNode {

@@ -6,8 +6,12 @@ import {
 import { Toaster, toast } from 'sonner';
 import { Modal } from './components/ui/Modal.js';
 import { TooltipProvider, Tooltip } from './components/ui/Tooltip.js';
-import type { ReviewMetadata, DiffResponse, ParsedFileDiff, UserPreferences, FinishResponse, FileChange, Comment, ThemeId } from '../../shared/types.js';
+import type { ReviewMetadata, DiffResponse, ParsedFileDiff, UserPreferences, FinishResponse, FileChange, Comment, ThemeId, CodeFontId, UiFontId } from '../../shared/types.js';
 import { THEMES, DEFAULT_THEME, normalizeThemeId } from './themes.js';
+import {
+  CODE_FONTS, UI_FONTS, DEFAULT_CODE_FONT, DEFAULT_UI_FONT,
+  normalizeCodeFontId, normalizeUiFontId, resolveCodeFontStack, resolveUiFontStack,
+} from './fonts.js';
 import { ReviewStoreProvider, useReviewStore } from './hooks/useReviewStore.js';
 import { DiffView } from './components/DiffView.js';
 import type { PierreViewType } from './components/FileDiff.js';
@@ -61,10 +65,12 @@ function loadPreferences(): UserPreferences {
       return {
         theme: normalizeThemeId(parsed.theme),
         fontSize: clampFontSize(parsed.fontSize ?? DEFAULT_FONT_SIZE),
+        codeFont: normalizeCodeFontId(parsed.codeFont),
+        uiFont: normalizeUiFontId(parsed.uiFont),
       };
     }
   } catch { /* ignore */ }
-  return { theme: DEFAULT_THEME, fontSize: DEFAULT_FONT_SIZE };
+  return { theme: DEFAULT_THEME, fontSize: DEFAULT_FONT_SIZE, codeFont: DEFAULT_CODE_FONT, uiFont: DEFAULT_UI_FONT };
 }
 
 function savePreferences(prefs: UserPreferences): void {
@@ -223,12 +229,17 @@ interface SettingsModalProps {
   onSelectContext: (level: ContextLevel) => void;
   fontSize: number;
   onChangeFontSize: (delta: number) => void;
+  codeFont: CodeFontId;
+  onSelectCodeFont: (id: CodeFontId) => void;
+  uiFont: UiFontId;
+  onSelectUiFont: (id: UiFontId) => void;
   onOpenShortcuts: () => void;
 }
 
 function SettingsModal({
   open, onOpenChange, viewType, onToggleView, theme, onSelectTheme,
-  contextLevel, onSelectContext, fontSize, onChangeFontSize, onOpenShortcuts,
+  contextLevel, onSelectContext, fontSize, onChangeFontSize,
+  codeFont, onSelectCodeFont, uiFont, onSelectUiFont, onOpenShortcuts,
 }: SettingsModalProps): React.JSX.Element {
   return (
     <Modal open={open} onOpenChange={onOpenChange} ariaLabel="Settings" dialogClassName="settings-dialog">
@@ -277,6 +288,34 @@ function SettingsModal({
               A+
             </button>
           </div>
+        </div>
+        <div className="settings-row">
+          <label className="settings-label" htmlFor="settings-code-font">Code font</label>
+          <select
+            id="settings-code-font"
+            className="theme-select"
+            value={codeFont}
+            onChange={(e) => onSelectCodeFont(e.target.value as CodeFontId)}
+            aria-label="Select code font"
+          >
+            {CODE_FONTS.map((f) => (
+              <option key={f.id} value={f.id}>{f.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="settings-row">
+          <label className="settings-label" htmlFor="settings-ui-font">UI font</label>
+          <select
+            id="settings-ui-font"
+            className="theme-select"
+            value={uiFont}
+            onChange={(e) => onSelectUiFont(e.target.value as UiFontId)}
+            aria-label="Select UI font"
+          >
+            {UI_FONTS.map((f) => (
+              <option key={f.id} value={f.id}>{f.label}</option>
+            ))}
+          </select>
         </div>
         <div className="settings-row">
           <label className="settings-label" htmlFor="settings-context">Context lines</label>
@@ -340,6 +379,10 @@ function AppContent({
   onSelectContext,
   fontSize,
   onChangeFontSize,
+  codeFont,
+  onSelectCodeFont,
+  uiFont,
+  onSelectUiFont,
 }: {
   metadata: ReviewMetadata;
   diffFiles: ParsedFileDiff[];
@@ -354,6 +397,10 @@ function AppContent({
   onSelectContext: (level: ContextLevel) => void;
   fontSize: number;
   onChangeFontSize: (delta: number) => void;
+  codeFont: CodeFontId;
+  onSelectCodeFont: (id: CodeFontId) => void;
+  uiFont: UiFontId;
+  onSelectUiFont: (id: UiFontId) => void;
 }): React.JSX.Element {
   const { viewMode, setViewMode, comments, isFileReviewed, markFileReviewed, unmarkFileReviewed } = useReviewStore();
   // Must run inside DiffWorkerPoolProvider: in worker-pool mode pierre reads its
@@ -579,6 +626,10 @@ function AppContent({
         onSelectContext={onSelectContext}
         fontSize={fontSize}
         onChangeFontSize={onChangeFontSize}
+        codeFont={codeFont}
+        onSelectCodeFont={onSelectCodeFont}
+        uiFont={uiFont}
+        onSelectUiFont={onSelectUiFont}
         onOpenShortcuts={() => { setShowSettings(false); setShowHelp(true); }}
       />
       <ShortcutHelpModal open={showHelp} onOpenChange={setShowHelp} />
@@ -602,8 +653,11 @@ export function App(): React.JSX.Element {
   const [diffFiles, setDiffFiles] = useState<ParsedFileDiff[] | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState('');
-  const [theme, setTheme] = useState<ThemeId>(() => loadPreferences().theme);
-  const [fontSize, setFontSize] = useState<number>(() => loadPreferences().fontSize);
+  const initialPrefs = useMemo(loadPreferences, []);
+  const [theme, setTheme] = useState<ThemeId>(initialPrefs.theme);
+  const [fontSize, setFontSize] = useState<number>(initialPrefs.fontSize);
+  const [codeFont, setCodeFont] = useState<CodeFontId>(initialPrefs.codeFont);
+  const [uiFont, setUiFont] = useState<UiFontId>(initialPrefs.uiFont);
   const [contextLevel, setContextLevel] = useState<ContextLevel>(loadContextLevel);
   const [view, setView] = useState<AppView>('review');
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
@@ -616,14 +670,21 @@ export function App(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    const root = document.documentElement;
+    root.setAttribute('data-theme', theme);
     // `--diffs-font-size`/`--diffs-line-height` are what @pierre/diffs reads
     // inside its shadow DOM (custom properties pierce the shadow boundary);
     // line-height tracks pierre's own 13px→20px ratio so rows stay legible.
-    document.documentElement.style.setProperty('--diffs-font-size', `${fontSize}px`);
-    document.documentElement.style.setProperty('--diffs-line-height', `${Math.round(fontSize * (20 / 13))}px`);
-    savePreferences({ theme, fontSize });
-  }, [theme, fontSize]);
+    root.style.setProperty('--diffs-font-size', `${fontSize}px`);
+    root.style.setProperty('--diffs-line-height', `${Math.round(fontSize * (20 / 13))}px`);
+    // --font-mono/--font-sans drive the app chrome; --diffs-font-family is the
+    // code font inside pierre's shadow DOM (same pierce-the-boundary trick).
+    const codeStack = resolveCodeFontStack(codeFont);
+    root.style.setProperty('--font-mono', codeStack);
+    root.style.setProperty('--diffs-font-family', codeStack);
+    root.style.setProperty('--font-sans', resolveUiFontStack(uiFont));
+    savePreferences({ theme, fontSize, codeFont, uiFont });
+  }, [theme, fontSize, codeFont, uiFont]);
 
   const fetchDiff = useCallback((level: ContextLevel): Promise<DiffResponse> => {
     return fetch(`/api/v1/diff?context=${level}`).then((r) => {
@@ -701,6 +762,14 @@ export function App(): React.JSX.Element {
     setFontSize((prev) => clampFontSize(prev + delta));
   }, []);
 
+  const handleSelectCodeFont = useCallback((id: CodeFontId) => {
+    setCodeFont(id);
+  }, []);
+
+  const handleSelectUiFont = useCallback((id: UiFontId) => {
+    setUiFont(id);
+  }, []);
+
   if (loadState === 'loading') {
     return (
       <div className="app skeleton" role="status" aria-label="Loading">
@@ -752,6 +821,10 @@ export function App(): React.JSX.Element {
             onSelectContext={handleSelectContext}
             fontSize={fontSize}
             onChangeFontSize={handleChangeFontSize}
+            codeFont={codeFont}
+            onSelectCodeFont={handleSelectCodeFont}
+            uiFont={uiFont}
+            onSelectUiFont={handleSelectUiFont}
           />
         </DiffWorkerPoolProvider>
       )}
