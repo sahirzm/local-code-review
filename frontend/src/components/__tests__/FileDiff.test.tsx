@@ -2,70 +2,68 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { FileDiff } from '../FileDiff.js';
 import { ReviewStoreProvider } from '../../hooks/useReviewStore.js';
-import type { ParsedFileDiff, Hunk, Change } from '../../shared/types.js';
+import type { ParsedFileDiff } from '../../shared/types.js';
 import type { ReactNode } from 'react';
 
 function wrapper({ children }: { children: ReactNode }) {
   return <ReviewStoreProvider>{children}</ReviewStoreProvider>;
 }
 
-function change(type: Change['type'], content: string, old?: number, new_?: number): Change {
-  return { type, content, oldLineNumber: old, newLineNumber: new_ };
-}
+const SYNTAX_THEME = { dark: 'dark-plus', light: 'light-plus' };
 
-function hunk(content: string, changes: Change[], overrides: Partial<Hunk> = {}): Hunk {
-  return { oldStart: 1, oldLines: changes.length, newStart: 1, newLines: changes.length, content, changes, ...overrides };
-}
-
-function fileDiff(hunks: Hunk[]): ParsedFileDiff {
+function fileDiff(overrides: Partial<ParsedFileDiff> = {}): ParsedFileDiff {
   return {
     oldPath: 'a.ts',
     newPath: 'a.ts',
-    hunks,
+    hunks: [],
     status: 'modified',
     additions: 1,
     deletions: 1,
     isBinary: false,
     isLarge: false,
+    rawPatch: [
+      'diff --git a/a.ts b/a.ts',
+      '--- a/a.ts',
+      '+++ b/a.ts',
+      '@@ -1,2 +1,2 @@',
+      ' a',
+      '-old',
+      '+new',
+      '',
+    ].join('\n'),
+    ...overrides,
   };
 }
 
-describe('FileDiff hunk separators', () => {
-  it('renders no separator for a single hunk', () => {
-    const file = fileDiff([
-      hunk('@@ -1,2 +1,2 @@', [change('normal', ' a', 1, 1), change('insert', '+b', undefined, 2)]),
-    ]);
-    render(<FileDiff file={file} viewType="unified" />, { wrapper });
-    expect(screen.queryAllByText(/@@ .* @@/)).toHaveLength(0);
+function renderFileDiff(file: ParsedFileDiff) {
+  return render(
+    <FileDiff file={file} viewType="unified" themeType="dark" syntaxTheme={SYNTAX_THEME} />,
+    { wrapper },
+  );
+}
+
+describe('FileDiff', () => {
+  it('renders the file path header', () => {
+    renderFileDiff(fileDiff());
+    expect(screen.getByText('a.ts')).toBeTruthy();
   });
 
-  it('renders a separator between two hunks with non-contiguous line ranges', () => {
-    const file = fileDiff([
-      hunk('@@ -1,3 +1,3 @@', [
-        change('normal', ' a', 1, 1),
-        change('insert', '+b', undefined, 2),
-        change('normal', ' c', 3, 3),
-      ]),
-      hunk('@@ -40,3 +41,3 @@', [
-        change('normal', ' x', 40, 41),
-        change('delete', '-y', 41),
-        change('normal', ' z', 42, 42),
-      ], { oldStart: 40, newStart: 41 }),
-    ]);
-    const { container } = render(<FileDiff file={file} viewType="unified" />, { wrapper });
-    const separators = container.querySelectorAll('.hunk-separator');
-    expect(separators).toHaveLength(1);
-    expect(separators[0].textContent).toBe('@@ -40,3 +41,3 @@');
+  it('shows a binary-file message instead of a diff for binary files', () => {
+    renderFileDiff(fileDiff({ isBinary: true }));
+    expect(screen.getByText('Binary file changed')).toBeTruthy();
   });
 
-  it('renders N-1 separators for N hunks', () => {
-    const file = fileDiff([
-      hunk('@@ -1,1 +1,1 @@', [change('insert', '+a', undefined, 1)]),
-      hunk('@@ -20,1 +21,1 @@', [change('insert', '+b', undefined, 21)], { oldStart: 20, newStart: 21 }),
-      hunk('@@ -40,1 +41,1 @@', [change('insert', '+c', undefined, 41)], { oldStart: 40, newStart: 41 }),
-    ]);
-    const { container } = render(<FileDiff file={file} viewType="unified" />, { wrapper });
-    const separators = container.querySelectorAll('.hunk-separator');
-    expect(separators).toHaveLength(2);
+  it('collapses large files behind a show-diff button', () => {
+    const { container } = renderFileDiff(fileDiff({ isLarge: true, additions: 9000, deletions: 3000 }));
+    const showBtn = container.querySelector('.show-diff-btn');
+    expect(showBtn).not.toBeNull();
+    expect(showBtn?.textContent).toContain('12000 lines');
+  });
+
+  it('renders the pierre diff surface for a non-binary file', () => {
+    const { container } = renderFileDiff(fileDiff());
+    // Pierre mounts its <diffs-*> web component host inside .file-diff.
+    expect(container.querySelector('.file-diff')).not.toBeNull();
+    expect(container.querySelector('.binary-message')).toBeNull();
   });
 });

@@ -16,10 +16,10 @@ html {
 
 /*
  * Theme tokens. :root holds the Default Dark palette. Each other theme is a
- * `[data-theme="<id>"]` block that overrides only the ~24 base semantic tokens
- * plus the 6 syntax tokens; every derived value below (hover shades, translucent
- * fills, and the react-diff-view --diff-* set) is computed from those bases with
- * color-mix(), so it re-derives automatically per theme.
+ * `[data-theme="<id>"]` block that overrides only the ~24 base semantic tokens;
+ * every derived value below (hover shades, translucent fills) is computed from
+ * those bases with color-mix(), so it re-derives automatically per theme. Diff
+ * syntax colors come from the shiki theme (see shikiTheme.ts), not from here.
  */
 :root {
   --color-bg: #1e1e1e;
@@ -47,14 +47,6 @@ html {
   --color-selection-text: #8bb9fe;
   --color-overlay: rgba(0, 0, 0, 0.6);
 
-  /* Syntax highlighting (Prism-based via refractor) */
-  --syntax-comment: #6a9955;
-  --syntax-number: #b5cea8;
-  --syntax-string: #ce9178;
-  --syntax-keyword: #569cd6;
-  --syntax-function: #dcdcaa;
-  --syntax-variable: #d16969;
-
   /* Derived hover shades — mix the base toward black/white so they track theme */
   --color-accent-hover: color-mix(in srgb, var(--color-accent), black 12%);
   --color-success-strong: color-mix(in srgb, var(--color-success), black 12%);
@@ -69,25 +61,9 @@ html {
   --fill-warning: color-mix(in srgb, var(--color-warning) 25%, transparent);
   --fill-muted: color-mix(in srgb, var(--color-text-muted) 25%, transparent);
 
-  /* react-diff-view variables, derived from the semantic palette */
-  --diff-background-color: var(--color-bg);
-  --diff-text-color: var(--color-text);
+  /* Diff typography — the only diff vars still consumed after @pierre/diffs
+   * took over rendering (it colors the diff itself from the shiki theme). */
   --diff-font-family: var(--font-mono);
-  --diff-selection-background-color: var(--color-selection-bg);
-  --diff-selection-text-color: var(--color-text);
-  --diff-gutter-insert-background-color: color-mix(in srgb, var(--color-success) 22%, var(--color-bg));
-  --diff-gutter-insert-text-color: var(--syntax-comment);
-  --diff-gutter-delete-background-color: color-mix(in srgb, var(--color-danger) 22%, var(--color-bg));
-  --diff-gutter-delete-text-color: var(--color-danger);
-  --diff-gutter-selected-background-color: color-mix(in srgb, var(--color-warning) 18%, var(--color-bg));
-  --diff-code-insert-background-color: color-mix(in srgb, var(--color-success) 14%, var(--color-bg));
-  --diff-code-insert-text-color: var(--color-text);
-  --diff-code-delete-background-color: color-mix(in srgb, var(--color-danger) 14%, var(--color-bg));
-  --diff-code-delete-text-color: var(--color-text);
-  --diff-code-insert-edit-background-color: color-mix(in srgb, var(--color-success) 30%, var(--color-bg));
-  --diff-code-delete-edit-background-color: color-mix(in srgb, var(--color-danger) 30%, var(--color-bg));
-  --diff-code-selected-background-color: color-mix(in srgb, var(--color-warning) 18%, var(--color-bg));
-  --diff-omit-gutter-line-color: var(--color-danger);
 }
 
 /*
@@ -146,12 +122,6 @@ html {
   --color-selection-bg: #ddf4ff;
   --color-selection-text: #0550ae;
   --color-overlay: rgba(0, 0, 0, 0.4);
-  --syntax-comment: #6e7781;
-  --syntax-number: #0550ae;
-  --syntax-string: #0a3069;
-  --syntax-keyword: #cf222e;
-  --syntax-function: #8250df;
-  --syntax-variable: #953800;
 }
 
 /* ===== Catppuccin Mocha (dark) ===== */
@@ -180,12 +150,6 @@ html {
   --color-selection-bg: #45475a;
   --color-selection-text: #89b4fa;
   --color-overlay: rgba(17, 17, 27, 0.7);
-  --syntax-comment: #6c7086;
-  --syntax-number: #fab387;
-  --syntax-string: #a6e3a1;
-  --syntax-keyword: #cba6f7;
-  --syntax-function: #89b4fa;
-  --syntax-variable: #f38ba8;
 }
 
 /* ===== Catppuccin Macchiato (dark) ===== */
@@ -214,12 +178,6 @@ html {
   --color-selection-bg: #494d64;
   --color-selection-text: #8aadf4;
   --color-overlay: rgba(24, 25, 38, 0.7);
-  --syntax-comment: #6e738d;
-  --syntax-number: #f5a97f;
-  --syntax-string: #a6da95;
-  --syntax-keyword: #c6a0f6;
-  --syntax-function: #8aadf4;
-  --syntax-variable: #ed8796;
 }
 
 /* ===== Catppuccin Frappé (dark) ===== */
@@ -248,12 +206,6 @@ html {
   --color-selection-bg: #51576d;
   --color-selection-text: #8caaee;
   --color-overlay: rgba(35, 38, 52, 0.7);
-  --syntax-comment: #737994;
-  --syntax-number: #ef9f76;
-  --syntax-string: #a6d189;
-  --syntax-keyword: #ca9ee6;
-  --syntax-function: #8caaee;
-  --syntax-variable: #e78284;
 }
 
 /* ===== Catppuccin Latte (light) ===== */
@@ -282,12 +234,6 @@ html {
   --color-selection-bg: #ccd0da;
   --color-selection-text: #1e66f5;
   --color-overlay: rgba(76, 79, 105, 0.35);
-  --syntax-comment: #8c8fa1;
-  --syntax-number: #fe640b;
-  --syntax-string: #40a02b;
-  --syntax-keyword: #8839ef;
-  --syntax-function: #1e66f5;
-  --syntax-variable: #d20f39;
 }
 
 * {
@@ -377,7 +323,8 @@ body {
 }
 
 /* ===== Theme Select ===== */
-.theme-select {
+.theme-select,
+.context-select {
   flex-shrink: 0;
   padding: 4px 8px;
   background: var(--color-panel-alt);
@@ -389,7 +336,8 @@ body {
   font-family: inherit;
 }
 
-.theme-select:hover {
+.theme-select:hover,
+.context-select:hover {
   background: var(--color-panel-hover);
 }
 
@@ -601,46 +549,9 @@ body {
   min-width: 5ch;
 }
 
-/* Syntax highlighting (Prism-based via refractor) */
-.token.comment,
-.token.prolog,
-.token.doctype,
-.token.cdata { color: var(--syntax-comment); }
-
-.token.punctuation { color: var(--color-text); }
-
-.token.property,
-.token.tag,
-.token.boolean,
-.token.number,
-.token.constant,
-.token.symbol { color: var(--syntax-number); }
-
-.token.selector,
-.token.attr-name,
-.token.string,
-.token.char,
-.token.builtin { color: var(--syntax-string); }
-
-.token.operator,
-.token.entity,
-.token.url { color: var(--color-text); }
-
-.token.atrule,
-.token.attr-value,
-.token.keyword { color: var(--syntax-keyword); }
-
-.token.function,
-.token.class-name { color: var(--syntax-function); }
-
-.token.regex,
-.token.important,
-.token.variable { color: var(--syntax-variable); }
-
-.token.important,
-.token.bold { font-weight: bold; }
-
-.token.italic { font-style: italic; }
+/* Syntax highlighting is handled by @pierre/diffs (shiki) inside its own
+ * shadow DOM, driven by the resolved shiki theme; there are no Prism token
+ * classes to style here anymore. */
 
 /* ===== Comment System Styles ===== */
 

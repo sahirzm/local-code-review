@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path as AxumPath, State},
+    extract::{Path as AxumPath, Query, State},
     response::IntoResponse,
     Json, Router,
 };
@@ -10,7 +10,7 @@ use axum::routing::{get, post};
 use serde::Deserialize;
 use tokio::sync::Mutex;
 
-use crate::git::GitModule;
+use crate::git::{diff_parser, DiffSource, GitModule};
 use crate::output::file_writer::{get_default_output_path, write_review_output};
 use crate::output::markdown::{generate_markdown, MarkdownInput};
 use crate::session;
@@ -21,6 +21,8 @@ use super::Shutdown;
 #[derive(Clone)]
 pub struct AppState {
     pub metadata: ReviewMetadata,
+    /// Diff at the startup default context; served when no `context` override
+    /// is requested and reused as the fallback if regeneration fails.
     pub diff_data: DiffResponse,
     pub repo_root: String,
     pub csrf_token: String,
@@ -28,6 +30,19 @@ pub struct AppState {
     pub git: Arc<Mutex<GitModule>>,
     pub shutdown: Arc<Shutdown>,
     pub config: crate::config::Config,
+    pub diff_source: DiffSource,
+    pub default_context: u32,
+}
+
+/// git2's `DiffOptions::context_lines` takes a u32; this stands in for "Full"
+/// (whole-file context) since no real file approaches this many context lines.
+pub const FULL_CONTEXT_LINES: u32 = 1_000_000;
+
+#[derive(Deserialize)]
+struct DiffQuery {
+    /// Requested context lines: a number, or `full` for whole-file context.
+    /// Absent → startup default.
+    context: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -63,8 +78,30 @@ async fn get_metadata(State(state): State<AppState>) -> Json<ReviewMetadata> {
     Json(state.metadata)
 }
 
-async fn get_diff(State(state): State<AppState>) -> Json<DiffResponse> {
-    Json(state.diff_data)
+async fn get_diff(
+    State(state): State<AppState>,
+    Query(query): Query<DiffQuery>,
+) -> Json<DiffResponse> {
+    let context = match query.context.as_deref() {
+        None => return Json(state.diff_data),
+        Some("full") => FULL_CONTEXT_LINES,
+        Some(n) => match n.parse::<u32>() {
+            Ok(parsed) => parsed,
+            Err(_) => return Json(state.diff_data),
+        },
+    };
+
+    if context == state.default_context {
+        return Json(state.diff_data);
+    }
+
+    let git = state.git.lock().await;
+    match git.diff_for_source(&state.diff_source, context) {
+        Ok(raw) => Json(DiffResponse {
+            files: diff_parser::parse_diff(&raw),
+        }),
+        Err(_) => Json(state.diff_data),
+    }
 }
 
 async fn get_file(
@@ -181,6 +218,7 @@ mod tests {
                 deletions: 0,
                 is_binary: false,
                 is_large: false,
+                raw_patch: String::new(),
             }],
         }
     }
@@ -201,6 +239,12 @@ mod tests {
             git: Arc::new(Mutex::new(git)),
             shutdown: Arc::new(Shutdown::new()),
             config: crate::config::Config::default(),
+            diff_source: DiffSource {
+                mode: "working".into(),
+                args: vec![],
+                include_untracked: false,
+            },
+            default_context: 3,
         };
         (state, tmp)
     }
@@ -264,6 +308,101 @@ mod tests {
         assert_eq!(res.status().as_u16(), 200);
         let json = body_json(res).await;
         assert_eq!(json["files"][0]["newPath"], "src/lib.rs");
+    }
+
+    #[tokio::test]
+    async fn diff_endpoint_absent_context_returns_default() {
+        let (state, _tmp) = test_state();
+        let res = create_api_router(state)
+            .oneshot(Request::builder().uri("/api/v1/diff").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        // No context override: the static startup diff is returned verbatim.
+        assert_eq!(body_json(res).await["files"][0]["newPath"], "src/lib.rs");
+    }
+
+    #[tokio::test]
+    async fn diff_endpoint_invalid_context_falls_back_to_default() {
+        let (state, _tmp) = test_state();
+        let res = create_api_router(state)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/diff?context=notanumber")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status().as_u16(), 200);
+        assert_eq!(body_json(res).await["files"][0]["newPath"], "src/lib.rs");
+    }
+
+    #[tokio::test]
+    async fn diff_endpoint_regenerates_at_requested_context() {
+        // A real repo with one commit + a working-tree change spanning enough
+        // lines that context=1 and context=full produce different line counts.
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(tmp.path()).unwrap();
+        let repo_root = tmp.path().to_string_lossy().to_string();
+        let file = tmp.path().join("f.txt");
+        let base: String = (1..=20).map(|n| format!("line {n}\n")).collect();
+        std::fs::write(&file, &base).unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index.add_path(Path::new("f.txt")).unwrap();
+            index.write().unwrap();
+            let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+            let sig = git2::Signature::now("t", "t@t").unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[]).unwrap();
+        }
+        // Modify a single middle line so context around it is what varies.
+        let edited = base.replace("line 10\n", "line 10 changed\n");
+        std::fs::write(&file, edited).unwrap();
+
+        let git = GitModule::new(&repo_root).unwrap();
+        let mut state = AppState {
+            metadata: metadata(),
+            diff_data: diff(),
+            repo_root,
+            csrf_token: CSRF.into(),
+            output_path: String::new(),
+            git: Arc::new(Mutex::new(git)),
+            shutdown: Arc::new(Shutdown::new()),
+            config: crate::config::Config::default(),
+            diff_source: DiffSource {
+                mode: "working".into(),
+                args: vec![],
+                include_untracked: false,
+            },
+            default_context: 3,
+        };
+        state.diff_data = DiffResponse { files: vec![] };
+
+        let count_lines = |v: &serde_json::Value| -> usize {
+            v["files"][0]["hunks"][0]["changes"].as_array().map_or(0, |a| a.len())
+        };
+
+        let router = create_api_router(state);
+        let tight = router
+            .clone()
+            .oneshot(Request::builder().uri("/api/v1/diff?context=1").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let tight_json = body_json(tight).await;
+
+        let full = router
+            .oneshot(Request::builder().uri("/api/v1/diff?context=full").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let full_json = body_json(full).await;
+
+        // The change is a line modification (1 delete + 1 insert). context=1
+        // adds 1 unchanged line either side → 1 + 1 + 1 + 1 = 4 change rows.
+        assert_eq!(count_lines(&tight_json), 4);
+        // Full context keeps every line: 19 unchanged + 1 delete + 1 insert.
+        assert_eq!(count_lines(&full_json), 21);
+        // The regenerated patch is carried through for the frontend adapter.
+        assert!(full_json["files"][0]["rawPatch"].as_str().unwrap().contains("line 10 changed"));
     }
 
     #[tokio::test]

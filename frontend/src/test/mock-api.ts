@@ -28,6 +28,17 @@ function metadata(): ReviewMetadata {
 }
 
 function diffFile(path: string, status: FileChange['status']): ParsedFileDiff {
+  const rawPatch = [
+    `diff --git a/${path} b/${path}`,
+    'index abc1234..def5678 100644',
+    `--- a/${path}`,
+    `+++ b/${path}`,
+    '@@ -1,2 +1,3 @@',
+    ' const greeting = "hello";',
+    '+export function run() { return greeting; }',
+    '-const removed = true;',
+    '',
+  ].join('\n');
   return {
     oldPath: path,
     newPath: path,
@@ -36,6 +47,7 @@ function diffFile(path: string, status: FileChange['status']): ParsedFileDiff {
     deletions: 1,
     isBinary: false,
     isLarge: false,
+    rawPatch,
     hunks: [
       {
         oldStart: 1,
@@ -44,9 +56,9 @@ function diffFile(path: string, status: FileChange['status']): ParsedFileDiff {
         newLines: 3,
         content: '@@ -1,2 +1,3 @@',
         changes: [
-          { type: 'normal', content: ' context', oldLineNumber: 1, newLineNumber: 1 },
-          { type: 'insert', content: '+added line', newLineNumber: 2 },
-          { type: 'delete', content: '-removed line', oldLineNumber: 2 },
+          { type: 'normal', content: 'context', oldLineNumber: 1, newLineNumber: 1 },
+          { type: 'insert', content: 'added line', newLineNumber: 2 },
+          { type: 'delete', content: 'removed line', oldLineNumber: 2 },
         ],
       },
     ],

@@ -135,6 +135,12 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    let diff_source = git::DiffSource {
+        mode: range.mode.clone(),
+        args: range.args.clone(),
+        include_untracked,
+    };
+
     let server_state = server::ServerState {
         metadata,
         diff_data,
@@ -144,6 +150,8 @@ async fn main() -> anyhow::Result<()> {
         git: Arc::new(Mutex::new(git)),
         frontend_dir: options.frontend_dir.clone().map(std::path::PathBuf::from),
         config: app_config,
+        diff_source,
+        default_context: options.context,
     };
 
     let (actual_port, shutdown) = server::start_server(server_state, options.port).await?;

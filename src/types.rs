@@ -109,6 +109,10 @@ pub struct ParsedFileDiff {
     pub deletions: u32,
     pub is_binary: bool,
     pub is_large: bool,
+    /// Original per-file unified-diff text (from its `diff --git` line up to the
+    /// next file). Fed verbatim to `@pierre/diffs` `getSingularPatch` on the
+    /// frontend for syntax-highlighted rendering.
+    pub raw_patch: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -554,6 +554,7 @@ mod tests {
             deletions: 1,
             is_binary: false,
             is_large: false,
+            raw_patch: String::new(),
             hunks: vec![Hunk {
                 old_start: 1,
                 old_lines: 2,

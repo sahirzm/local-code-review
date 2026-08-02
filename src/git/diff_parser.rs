@@ -63,6 +63,7 @@ pub fn parse_diff(raw: &str) -> Vec<ParsedFileDiff> {
             }
         };
 
+        let file_start = i;
         let mut old_path = header_caps.get(1).unwrap().as_str().to_string();
         let mut new_path = header_caps.get(2).unwrap().as_str().to_string();
         i += 1;
@@ -203,6 +204,7 @@ pub fn parse_diff(raw: &str) -> Vec<ParsedFileDiff> {
         }
 
         let total_changes = additions + deletions;
+        let raw_patch = lines[file_start..i].join("\n");
 
         let transformed_old = if old_path == "/dev/null" { new_path.clone() } else { old_path.clone() };
         let transformed_new = if new_path == "/dev/null" { old_path } else { new_path };
@@ -215,6 +217,7 @@ pub fn parse_diff(raw: &str) -> Vec<ParsedFileDiff> {
             deletions,
             is_binary: binary,
             is_large: total_changes > 10000,
+            raw_patch,
         });
     }
 
@@ -516,6 +519,40 @@ index abc1234..def5678 100644
         let files = parse_diff(&raw);
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].new_path, long_path);
+    }
+
+    #[test]
+    fn captures_raw_patch_per_file() {
+        let raw = "\
+diff --git a/file1.ts b/file1.ts
+index abc1234..def5678 100644
+--- a/file1.ts
++++ b/file1.ts
+@@ -1,2 +1,2 @@
+-old line
++new line
+ context
+diff --git a/file2.ts b/file2.ts
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/file2.ts
+@@ -0,0 +1,1 @@
++added
+";
+        let files = parse_diff(raw);
+        assert_eq!(files.len(), 2);
+        // Each file's raw_patch is its own slice, starting at its diff --git
+        // header and not bleeding into the next file.
+        assert!(files[0].raw_patch.starts_with("diff --git a/file1.ts b/file1.ts"));
+        assert!(files[0].raw_patch.contains("+new line"));
+        assert!(!files[0].raw_patch.contains("file2.ts"));
+        assert!(files[1].raw_patch.starts_with("diff --git a/file2.ts b/file2.ts"));
+        assert!(files[1].raw_patch.contains("+added"));
+        // Re-parsing a single file's raw_patch yields the same structured file.
+        let reparsed = parse_diff(&files[0].raw_patch);
+        assert_eq!(reparsed.len(), 1);
+        assert_eq!(reparsed[0], files[0]);
     }
 
     #[test]

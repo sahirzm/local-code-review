@@ -1,12 +1,14 @@
 import { useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { ViewType } from 'react-diff-view';
 import type { ParsedFileDiff } from '../../../shared/types.js';
-import { FileDiff } from './FileDiff.js';
+import { FileDiff, type PierreViewType } from './FileDiff.js';
+import type { ShikiThemePair } from './diff/shikiTheme.js';
 
 interface DiffViewProps {
   files: ParsedFileDiff[] | null;
-  viewType: ViewType;
+  viewType: PierreViewType;
+  themeType: 'dark' | 'light';
+  syntaxTheme: ShikiThemePair;
   activeCommentId?: string | null;
   scrollDirection?: 'forward' | 'backward' | null;
 }
@@ -15,7 +17,10 @@ export interface DiffViewHandle {
   scrollToFile: (filePath: string) => void;
 }
 
-export const DiffView = forwardRef<DiffViewHandle, DiffViewProps>(function DiffView({ files, viewType, activeCommentId, scrollDirection }, ref) {
+export const DiffView = forwardRef<DiffViewHandle, DiffViewProps>(function DiffView(
+  { files, viewType, themeType, syntaxTheme, activeCommentId, scrollDirection },
+  ref,
+) {
   const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -29,11 +34,10 @@ export const DiffView = forwardRef<DiffViewHandle, DiffViewProps>(function DiffV
     (filePath: string) => {
       const idx = files?.findIndex((f) => (f.newPath || f.oldPath) === filePath) ?? -1;
       if (idx < 0) return;
-      // Only scroll if the file isn't rendered by the virtualizer yet
-      const el = parentRef.current?.querySelector(`[data-index="${idx}"]`);
-      if (!el) {
-        virtualizer.scrollToIndex(idx, { align: 'start' });
-      }
+      // Always drive the scroll through the virtualizer. The previous guard
+      // (only scroll when the row wasn't already in the DOM) made tree clicks
+      // no-op whenever the target was rendered in the overscan window.
+      virtualizer.scrollToIndex(idx, { align: 'start' });
     },
     [files, virtualizer],
   );
@@ -76,7 +80,14 @@ export const DiffView = forwardRef<DiffViewHandle, DiffViewProps>(function DiffV
                 transform: `translateY(${virtualItem.start}px)`,
               }}
             >
-              <FileDiff file={file} viewType={viewType} activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
+              <FileDiff
+                file={file}
+                viewType={viewType}
+                themeType={themeType}
+                syntaxTheme={syntaxTheme}
+                activeCommentId={activeCommentId}
+                scrollDirection={scrollDirection}
+              />
             </div>
           );
         })}

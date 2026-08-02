@@ -12,6 +12,17 @@ pub struct GitModule {
     pub repo: Option<Repository>,
 }
 
+/// Captures which diff a session is showing so it can be regenerated at a
+/// different context-line count on demand (e.g. the web UI's 5/10/20/50/Full
+/// selector). Mirrors the `RangeResult` mode/args plus the untracked choice
+/// resolved once at startup.
+#[derive(Debug, Clone)]
+pub struct DiffSource {
+    pub mode: String,
+    pub args: Vec<String>,
+    pub include_untracked: bool,
+}
+
 impl GitModule {
     pub fn new(repo_path: &str) -> anyhow::Result<Self> {
         let repo = Repository::open(repo_path)?;
@@ -171,6 +182,20 @@ impl GitModule {
         }
         out.sort();
         Ok(out)
+    }
+
+    /// Regenerate the raw unified diff for `source` at the requested context.
+    /// Shared by startup (`main.rs`) and the on-demand `/api/v1/diff?context=`
+    /// route so both honor the exact same range semantics.
+    pub fn diff_for_source(&self, source: &DiffSource, context_lines: u32) -> anyhow::Result<String> {
+        match source.mode.as_str() {
+            "staged" => self.get_staged_diff(context_lines),
+            "unstaged" => self.get_unstaged_diff(context_lines),
+            "working" => self.get_working_diff(context_lines),
+            "commits" => self.get_diff(&source.args[0], &source.args[1], context_lines),
+            "all" => self.get_diff_from_to_workdir(&source.args[0], source.include_untracked, context_lines),
+            other => anyhow::bail!("Unknown range mode: {}", other),
+        }
     }
 
     pub fn get_diff_from_to_workdir(

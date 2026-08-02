@@ -19,6 +19,11 @@ export default defineWorkspace([
     test: {
       name: 'browser',
       include: ['src/**/*.browser.test.tsx'],
+      // Run browser test files one at a time. They share a single headless
+      // Chromium, and the @pierre/diffs worker pool that the diff surface spins
+      // up makes concurrent files contend for it — starving locator actions
+      // enough to trip their default 1s timeout intermittently.
+      fileParallelism: false,
       browser: {
         enabled: true,
         provider: 'playwright',

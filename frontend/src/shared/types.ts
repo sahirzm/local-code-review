@@ -54,6 +54,8 @@ export interface ParsedFileDiff {
   deletions: number;
   isBinary: boolean;
   isLarge: boolean;
+  /** Raw per-file unified-diff text, fed to @pierre/diffs getSingularPatch. */
+  rawPatch: string;
 }
 
 export interface Hunk {

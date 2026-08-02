@@ -224,6 +224,7 @@ mod tests {
                     deletions: 2,
                     is_binary: false,
                     is_large: false,
+                    raw_patch: String::new(),
                     hunks: vec![
                         Hunk {
                             old_start: 40,
@@ -266,6 +267,7 @@ mod tests {
                     deletions: 1,
                     is_binary: false,
                     is_large: false,
+                    raw_patch: String::new(),
                     hunks: vec![
                         Hunk {
                             old_start: 1,

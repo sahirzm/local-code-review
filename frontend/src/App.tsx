@@ -4,7 +4,6 @@ import {
   ChevronLeft, ChevronRight, HelpCircle, X, AlertTriangle,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
-import type { ViewType } from 'react-diff-view';
 import { Modal } from './components/ui/Modal.js';
 import { TooltipProvider, Tooltip } from './components/ui/Tooltip.js';
 import type { ReviewMetadata, DiffResponse, ParsedFileDiff, UserPreferences, FinishResponse, FileChange, Comment, ThemeId } from '../../shared/types.js';
@@ -12,6 +11,9 @@ import { THEMES, DEFAULT_THEME, normalizeThemeId } from './themes.js';
 import { ReviewStoreProvider, useReviewStore } from './hooks/useReviewStore.js';
 import { DiffView } from './components/DiffView.js';
 import type { DiffViewHandle } from './components/DiffView.js';
+import type { PierreViewType } from './components/FileDiff.js';
+import { DiffWorkerPoolProvider, useWorkerPoolThemeSync } from './components/diff/workerPool.js';
+import { resolveShikiTheme } from './components/diff/shikiTheme.js';
 import { Sidebar } from './components/Sidebar.js';
 import { OverallComments } from './components/OverallComments.js';
 import { SummaryPage } from './components/SummaryPage.js';
@@ -19,11 +21,27 @@ import { generateClientMarkdown, downloadMarkdown } from './utils/client-markdow
 import { cleanExpiredSessions } from './hooks/useSession.js';
 import { useQuotaMonitor } from './hooks/useQuotaMonitor.js';
 import { useKeyboardShortcuts, SHORTCUT_LIST } from './hooks/useKeyboardShortcuts.js';
-import 'react-diff-view/style/index.css';
 import './App.css';
 
 type LoadState = 'loading' | 'ready' | 'error';
 type AppView = 'review' | 'summary';
+type ViewType = PierreViewType;
+
+/** Diff context-line levels offered in the toolbar; 'full' maps to whole-file. */
+const CONTEXT_LEVELS = [5, 10, 20, 50, 'full'] as const;
+type ContextLevel = (typeof CONTEXT_LEVELS)[number];
+const DEFAULT_CONTEXT: ContextLevel = 5;
+const CONTEXT_STORAGE_KEY = 'local-review:diff-context';
+
+function loadContextLevel(): ContextLevel {
+  try {
+    const raw = localStorage.getItem(CONTEXT_STORAGE_KEY);
+    if (raw === 'full') return 'full';
+    const n = Number(raw);
+    if (CONTEXT_LEVELS.includes(n as ContextLevel)) return n as ContextLevel;
+  } catch { /* ignore */ }
+  return DEFAULT_CONTEXT;
+}
 
 const PREFS_KEY = 'local-review:preferences';
 
@@ -216,6 +234,10 @@ function AppContent({
   onRefresh,
   onSelectTheme,
   theme,
+  themeMode,
+  syntaxTheme,
+  contextLevel,
+  onSelectContext,
   fontSize,
   onChangeFontSize,
 }: {
@@ -226,6 +248,10 @@ function AppContent({
   onRefresh: () => void;
   onSelectTheme: (id: ThemeId) => void;
   theme: ThemeId;
+  themeMode: 'dark' | 'light';
+  syntaxTheme: ReturnType<typeof resolveShikiTheme>;
+  contextLevel: ContextLevel;
+  onSelectContext: (level: ContextLevel) => void;
   fontSize: number;
   onChangeFontSize: (delta: number) => void;
 }): React.JSX.Element {
@@ -387,6 +413,19 @@ function AppContent({
                   : <><AlignJustify size={14} aria-hidden="true" /> Unified</>}
               </button>
               <select
+                className="context-select"
+                value={String(contextLevel)}
+                onChange={(e) => onSelectContext(e.target.value === 'full' ? 'full' : Number(e.target.value) as ContextLevel)}
+                aria-label="Diff context lines"
+                title="Context lines"
+              >
+                {CONTEXT_LEVELS.map((level) => (
+                  <option key={level} value={String(level)}>
+                    {level === 'full' ? 'Full context' : `${level} lines`}
+                  </option>
+                ))}
+              </select>
+              <select
                 className="theme-select"
                 value={theme}
                 onChange={(e) => onSelectTheme(e.target.value as ThemeId)}
@@ -431,7 +470,7 @@ function AppContent({
         <Sidebar files={fileChanges} onFileClick={handleFileClick} />
         <div className="app-main">
           <OverallComments activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
-          <DiffView ref={diffViewRef} files={diffFiles} viewType={viewType} activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
+          <DiffView ref={diffViewRef} files={diffFiles} viewType={viewType} themeType={themeMode} syntaxTheme={syntaxTheme} activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
         </div>
       </div>
       <StatusBar totalFiles={fileChanges.length} />
@@ -458,8 +497,13 @@ export function App(): React.JSX.Element {
   const [error, setError] = useState('');
   const [theme, setTheme] = useState<ThemeId>(() => loadPreferences().theme);
   const [fontSize, setFontSize] = useState<number>(() => loadPreferences().fontSize);
+  const [contextLevel, setContextLevel] = useState<ContextLevel>(loadContextLevel);
   const [view, setView] = useState<AppView>('review');
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
+
+  const themeMode = THEMES.find((t) => t.id === theme)?.mode ?? 'dark';
+  const syntaxTheme = useMemo(() => resolveShikiTheme(theme), [theme]);
+  useWorkerPoolThemeSync(syntaxTheme);
 
   useEffect(() => {
     cleanExpiredSessions();
@@ -471,6 +515,13 @@ export function App(): React.JSX.Element {
     savePreferences({ theme, fontSize });
   }, [theme, fontSize]);
 
+  const fetchDiff = useCallback((level: ContextLevel): Promise<DiffResponse> => {
+    return fetch(`/api/v1/diff?context=${level}`).then((r) => {
+      if (!r.ok) throw new Error(`diff: ${r.status}`);
+      return r.json() as Promise<DiffResponse>;
+    });
+  }, []);
+
   const fetchData = useCallback(() => {
     setLoadState('loading');
     setError('');
@@ -479,10 +530,7 @@ export function App(): React.JSX.Element {
         if (!r.ok) throw new Error(`metadata: ${r.status}`);
         return r.json() as Promise<ReviewMetadata>;
       }),
-      fetch('/api/v1/diff').then((r) => {
-        if (!r.ok) throw new Error(`diff: ${r.status}`);
-        return r.json() as Promise<DiffResponse>;
-      }),
+      fetchDiff(contextLevel),
     ])
       .then(([meta, diff]) => {
         setMetadata(meta);
@@ -493,26 +541,38 @@ export function App(): React.JSX.Element {
         setError(err.message);
         setLoadState('error');
       });
-  }, []);
+  }, [fetchDiff, contextLevel]);
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    // Initial load only; context changes are handled by handleSelectContext so
+    // a refetch doesn't reset the whole page to its loading skeleton.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleRefresh = useCallback(() => {
-    // Re-fetch only diff data
-    fetch('/api/v1/diff')
-      .then((r) => {
-        if (!r.ok) throw new Error(`diff: ${r.status}`);
-        return r.json() as Promise<DiffResponse>;
-      })
+    fetchDiff(contextLevel)
       .then((diff) => {
         setDiffFiles(diff.files ?? []);
       })
       .catch((err: Error) => {
         toast.error('Refresh failed', { description: err.message });
       });
-  }, []);
+  }, [fetchDiff, contextLevel]);
+
+  const handleSelectContext = useCallback((level: ContextLevel) => {
+    setContextLevel(level);
+    try {
+      localStorage.setItem(CONTEXT_STORAGE_KEY, String(level));
+    } catch { /* ignore */ }
+    fetchDiff(level)
+      .then((diff) => {
+        setDiffFiles(diff.files ?? []);
+      })
+      .catch((err: Error) => {
+        toast.error('Failed to change context', { description: err.message });
+      });
+  }, [fetchDiff]);
 
   const handleFinish = useCallback((data: SummaryData) => {
     setSummaryData(data);
@@ -555,7 +615,7 @@ export function App(): React.JSX.Element {
     <ReviewStoreProvider metadata={metadata}>
       <Toaster
         position="top-right"
-        theme={THEMES.find((t) => t.id === theme)?.mode ?? 'dark'}
+        theme={themeMode}
         richColors
         closeButton
       />
@@ -567,17 +627,23 @@ export function App(): React.JSX.Element {
           onContinue={handleContinue}
         />
       ) : (
-        <AppContent
-          metadata={metadata}
-          diffFiles={diffFiles}
-          fileChanges={metadata.files}
-          onFinish={handleFinish}
-          onRefresh={handleRefresh}
-          onSelectTheme={handleSelectTheme}
-          theme={theme}
-          fontSize={fontSize}
-          onChangeFontSize={handleChangeFontSize}
-        />
+        <DiffWorkerPoolProvider>
+          <AppContent
+            metadata={metadata}
+            diffFiles={diffFiles}
+            fileChanges={metadata.files}
+            onFinish={handleFinish}
+            onRefresh={handleRefresh}
+            onSelectTheme={handleSelectTheme}
+            theme={theme}
+            themeMode={themeMode}
+            syntaxTheme={syntaxTheme}
+            contextLevel={contextLevel}
+            onSelectContext={handleSelectContext}
+            fontSize={fontSize}
+            onChangeFontSize={handleChangeFontSize}
+          />
+        </DiffWorkerPoolProvider>
       )}
     </ReviewStoreProvider>
   );

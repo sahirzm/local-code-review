@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::config::Config;
-use crate::git::GitModule;
+use crate::git::{DiffSource, GitModule};
 use crate::types::{DiffResponse, ReviewMetadata};
 
 pub mod frontend;
@@ -26,6 +26,8 @@ pub struct ServerState {
     pub git: Arc<Mutex<GitModule>>,
     pub frontend_dir: Option<PathBuf>,
     pub config: Config,
+    pub diff_source: DiffSource,
+    pub default_context: u32,
 }
 
 pub async fn start_server(
@@ -44,6 +46,8 @@ pub async fn start_server(
         git: state.git,
         shutdown: shutdown_clone,
         config: state.config,
+        diff_source: state.diff_source,
+        default_context: state.default_context,
     };
 
     let api = routes::create_api_router(app_state);
