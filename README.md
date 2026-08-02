@@ -130,6 +130,22 @@ stdio, exposing a single **`start_review`** tool:
 
 The `.local-review/<timestamp>.md` file is still written for the record.
 
+`start_review` accepts the same options as the CLI (everything except `--tui`,
+which is incompatible with MCP's stdio transport):
+
+| Argument | Maps to CLI | Notes |
+|---|---|---|
+| `mode` | `--staged`/`--unstaged`/`--working`/`--all`, or `"commits"` | Omit for the default range |
+| `commit1`, `commit2` | positional commits | `commit1` required when `mode` is `"commits"` |
+| `base` | `--base` | |
+| `context` | `-U/--context` | Defaults to the config value |
+| `fetch` | `--fetch` | |
+| `include_untracked` | `--all` prompt | Only meaningful with `mode: "all"` |
+| `port` | `-p/--port` | 1–65535; auto-increments if busy. Default `8989` |
+| `no_open` | `--no-open` | Skip auto-opening the browser |
+| `output` | `-o/--output` | Extra path to write the markdown to |
+| `frontend_dir` | `--frontend-dir` | Dev override for the served frontend |
+
 ### Install
 
 ```bash

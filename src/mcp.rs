@@ -41,6 +41,21 @@ pub struct StartReviewArgs {
     /// Include untracked files (only meaningful with mode "all").
     #[serde(default)]
     pub include_untracked: Option<bool>,
+    /// Port to bind the review server (1-65535). Auto-increments if in use.
+    /// Defaults to 8989.
+    #[serde(default)]
+    pub port: Option<u16>,
+    /// Do not open a browser window automatically. Defaults to false (opens).
+    #[serde(default)]
+    pub no_open: Option<bool>,
+    /// Path to also write the review markdown to. The markdown is always
+    /// returned to the caller regardless.
+    #[serde(default)]
+    pub output: Option<String>,
+    /// Serve the frontend from this directory instead of the embedded assets
+    /// (dev override).
+    #[serde(default)]
+    pub frontend_dir: Option<String>,
 }
 
 /// Default review server port, matching the CLI's `--port` default. The server
@@ -57,12 +72,18 @@ impl StartReviewArgs {
     /// Translate the tool arguments into `CliOptions`, applying the same
     /// mutual-exclusion rules as the CLI parser.
     fn into_options(self, default_context: u32) -> anyhow::Result<CliOptions> {
+        let port = match self.port {
+            Some(p) => crate::cli::validate_port(p as usize).map_err(|e| anyhow::anyhow!(e))?,
+            None => DEFAULT_PORT,
+        };
         let mut opts = CliOptions {
-            port: DEFAULT_PORT,
+            port,
             context: self.context.unwrap_or(default_context),
             base: self.base,
             fetch: self.fetch.unwrap_or(false),
-            no_open: false,
+            no_open: self.no_open.unwrap_or(false),
+            output: self.output,
+            frontend_dir: self.frontend_dir,
             ..Default::default()
         };
 
@@ -107,7 +128,9 @@ impl ReviewServer {
     #[tool(
         description = "Launch a local human code review in the browser for the current git repo. \
         Opens a diff viewer, blocks until the human finishes the review, then returns the review \
-        as markdown. Use when you want a human to review changes before proceeding."
+        as markdown. Use when you want a human to review changes before proceeding. Supports the \
+        same options as the CLI (except --tui): port, no_open, output, frontend_dir, context, \
+        fetch, mode, base, commit1/commit2, and include_untracked."
     )]
     async fn start_review(
         &self,
@@ -132,6 +155,7 @@ impl ReviewServer {
         let include_untracked = args.include_untracked.unwrap_or(false);
         let options = args.into_options(self.config.diff_context_lines)?;
         let port = options.port;
+        let no_open = options.no_open;
 
         let (tx, rx) = oneshot::channel::<String>();
         let inputs = ReviewInputs {
@@ -146,7 +170,7 @@ impl ReviewServer {
         // No idle timeout: a human review may take arbitrarily long, and only an
         // explicit finish (or the agent cancelling) should end it.
         let (_port, shutdown, handle) =
-            review::start_and_open(state, port, false, Shutdown::with_timeout(None)).await?;
+            review::start_and_open(state, port, no_open, Shutdown::with_timeout(None)).await?;
 
         let markdown = rx.await.map_err(|_| {
             anyhow::anyhow!("review ended without a submission (server closed before finish)")
@@ -249,5 +273,50 @@ mod tests {
             ..Default::default()
         };
         assert!(args.into_options(3).is_err());
+    }
+
+    #[test]
+    fn port_defaults_to_8989_when_absent() {
+        assert_eq!(StartReviewArgs::default().into_options(3).unwrap().port, DEFAULT_PORT);
+    }
+
+    #[test]
+    fn custom_port_is_applied() {
+        let args = StartReviewArgs {
+            port: Some(8080),
+            ..Default::default()
+        };
+        assert_eq!(args.into_options(3).unwrap().port, 8080);
+    }
+
+    #[test]
+    fn zero_port_is_rejected() {
+        let args = StartReviewArgs {
+            port: Some(0),
+            ..Default::default()
+        };
+        assert!(args.into_options(3).is_err());
+    }
+
+    #[test]
+    fn no_open_defaults_false_and_is_forwarded() {
+        assert!(!StartReviewArgs::default().into_options(3).unwrap().no_open);
+        let args = StartReviewArgs {
+            no_open: Some(true),
+            ..Default::default()
+        };
+        assert!(args.into_options(3).unwrap().no_open);
+    }
+
+    #[test]
+    fn output_and_frontend_dir_are_forwarded() {
+        let args = StartReviewArgs {
+            output: Some("review.md".to_string()),
+            frontend_dir: Some("/tmp/frontend".to_string()),
+            ..Default::default()
+        };
+        let opts = args.into_options(3).unwrap();
+        assert_eq!(opts.output.as_deref(), Some("review.md"));
+        assert_eq!(opts.frontend_dir.as_deref(), Some("/tmp/frontend"));
     }
 }

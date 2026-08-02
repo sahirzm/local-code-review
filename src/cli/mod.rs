@@ -5,6 +5,11 @@ fn port_in_range(s: &str) -> Result<u16, String> {
     let port: usize = s
         .parse()
         .map_err(|_| format!("`{}` isn't a port number", s))?;
+    validate_port(port)
+}
+
+/// Shared port-range check (1–65535) used by the CLI parser and the MCP tool.
+pub fn validate_port(port: usize) -> Result<u16, String> {
     if (1..=65535).contains(&port) {
         Ok(port as u16)
     } else {
