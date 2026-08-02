@@ -2,8 +2,11 @@ use std::sync::Arc;
 
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{CallToolResult, ContentBlock, ServerCapabilities, ServerInfo};
-use rmcp::{tool, tool_handler, tool_router, ErrorData, ServerHandler, ServiceExt};
+use rmcp::model::{
+    CallToolResult, ContentBlock, ProgressNotificationParam, ServerCapabilities, ServerInfo,
+};
+use rmcp::service::RequestContext;
+use rmcp::{tool, tool_handler, tool_router, ErrorData, RoleServer, ServerHandler, ServiceExt};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tokio::sync::{oneshot, Mutex};
@@ -135,8 +138,9 @@ impl ReviewServer {
     async fn start_review(
         &self,
         Parameters(args): Parameters<StartReviewArgs>,
+        ctx: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
-        match self.run_review(args).await {
+        match self.run_review(args, &ctx).await {
             Ok(markdown) => Ok(CallToolResult::success(vec![ContentBlock::text(markdown)])),
             Err(e) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Review failed: {}",
@@ -145,7 +149,11 @@ impl ReviewServer {
         }
     }
 
-    async fn run_review(&self, args: StartReviewArgs) -> anyhow::Result<String> {
+    async fn run_review(
+        &self,
+        args: StartReviewArgs,
+        ctx: &RequestContext<RoleServer>,
+    ) -> anyhow::Result<String> {
         let cwd = std::env::current_dir()?;
         let cwd_str = cwd.to_string_lossy().to_string();
         if !GitModule::is_git_repo(&cwd_str) {
@@ -169,8 +177,14 @@ impl ReviewServer {
 
         // No idle timeout: a human review may take arbitrarily long, and only an
         // explicit finish (or the agent cancelling) should end it.
-        let (_port, shutdown, handle) =
+        let (actual_port, shutdown, handle) =
             review::start_and_open(state, port, no_open, Shutdown::with_timeout(None)).await?;
+
+        // `start_review` blocks until the human clicks Finish, so the URL can't
+        // go in the return value. Push it as a progress notification (if the
+        // client supplied a token) so the agent/user sees where to review
+        // instead of a silent, seemingly-stuck call.
+        self.notify_review_ready(ctx, actual_port).await;
 
         let markdown = rx.await.map_err(|_| {
             anyhow::anyhow!("review ended without a submission (server closed before finish)")
@@ -183,6 +197,29 @@ impl ReviewServer {
 
         Ok(markdown)
     }
+
+    /// Tell the client where the review UI is listening. Progress notifications
+    /// require the client to have supplied a `progressToken` in the request's
+    /// `_meta`; when it did not, there is no channel to push to, so this is a
+    /// no-op (the URL still went to stderr via `start_and_open`).
+    async fn notify_review_ready(&self, ctx: &RequestContext<RoleServer>, port: u16) {
+        let Some(token) = ctx.meta.get_progress_token() else {
+            return;
+        };
+        let param = ProgressNotificationParam::new(token, 0.0).with_message(review_ready_message(port));
+        if let Err(e) = ctx.peer.notify_progress(param).await {
+            eprintln!("Failed to send review-ready progress notification: {}", e);
+        }
+    }
+}
+
+/// The review-ready message, keyed on the port the server actually bound (which
+/// may differ from the requested port when it auto-increments past a busy one).
+fn review_ready_message(port: u16) -> String {
+    format!(
+        "Review UI ready at http://127.0.0.1:{} — open it, review your changes, then click Finish to return your comments.",
+        port
+    )
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -318,5 +355,11 @@ mod tests {
         let opts = args.into_options(3).unwrap();
         assert_eq!(opts.output.as_deref(), Some("review.md"));
         assert_eq!(opts.frontend_dir.as_deref(), Some("/tmp/frontend"));
+    }
+
+    #[test]
+    fn review_ready_message_reflects_the_bound_port() {
+        assert!(review_ready_message(8080).contains("http://127.0.0.1:8080"));
+        assert!(review_ready_message(9123).contains("http://127.0.0.1:9123"));
     }
 }
