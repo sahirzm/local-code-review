@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Trash2, Check, MessageSquarePlus, RefreshCw, Columns2, AlignJustify,
+  Trash2, Check, Circle, MessageSquarePlus, RefreshCw, Columns2, AlignJustify,
   ChevronLeft, ChevronRight, HelpCircle, X, AlertTriangle,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
@@ -10,7 +10,6 @@ import type { ReviewMetadata, DiffResponse, ParsedFileDiff, UserPreferences, Fin
 import { THEMES, DEFAULT_THEME, normalizeThemeId } from './themes.js';
 import { ReviewStoreProvider, useReviewStore } from './hooks/useReviewStore.js';
 import { DiffView } from './components/DiffView.js';
-import type { DiffViewHandle } from './components/DiffView.js';
 import type { PierreViewType } from './components/FileDiff.js';
 import { DiffWorkerPoolProvider, useWorkerPoolThemeSync } from './components/diff/workerPool.js';
 import { resolveShikiTheme } from './components/diff/shikiTheme.js';
@@ -70,6 +69,15 @@ function loadPreferences(): UserPreferences {
 
 function savePreferences(prefs: UserPreferences): void {
   localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+}
+
+// The backend returns files in git's diff order, which doesn't match the
+// alphabetical sidebar tree. Sort by display path so the diff view, file
+// navigation, and sidebar all agree on order.
+export function sortDiffFiles(files: ParsedFileDiff[]): ParsedFileDiff[] {
+  return [...files].sort((a, b) =>
+    (a.newPath || a.oldPath).localeCompare(b.newPath || b.oldPath),
+  );
 }
 
 function useResponsiveViewType(initial: ViewType): [ViewType, (vt: ViewType) => void] {
@@ -255,15 +263,25 @@ function AppContent({
   fontSize: number;
   onChangeFontSize: (delta: number) => void;
 }): React.JSX.Element {
-  const { viewMode, setViewMode, comments } = useReviewStore();
+  const { viewMode, setViewMode, comments, isFileReviewed, markFileReviewed, unmarkFileReviewed } = useReviewStore();
   const [viewType, setViewType] = useResponsiveViewType(viewMode as ViewType);
   const quota = useQuotaMonitor();
-  const diffViewRef = useRef<DiffViewHandle>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [showRefreshWarn, setShowRefreshWarn] = useState(false);
   const [commentIdx, setCommentIdx] = useState(-1);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [scrollDirection, setScrollDirection] = useState<'forward' | 'backward' | null>(null);
+  // The diff surface shows one file at a time; this is the selected file.
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const filePaths = useMemo(() => diffFiles.map((f) => f.newPath || f.oldPath), [diffFiles]);
+  // Clamp if the file list shrinks (e.g. after a refresh with fewer files).
+  const safeIndex = Math.max(0, Math.min(diffFiles.length - 1, currentIndex));
+  const currentPath = filePaths[safeIndex];
+  const currentReviewed = currentPath != null && isFileReviewed(currentPath);
+  const scrollTop = useCallback(() => {
+    document.querySelector('.diff-view-scroll')?.scrollTo({ top: 0 });
+  }, []);
 
   useEffect(() => {
     setViewType(viewMode as ViewType);
@@ -275,14 +293,35 @@ function AppContent({
     setViewMode(next);
   }, [viewType, setViewType, setViewMode]);
 
+  const goToFile = useCallback((index: number) => {
+    if (diffFiles.length === 0) return;
+    const clamped = Math.max(0, Math.min(diffFiles.length - 1, index));
+    setCurrentIndex(clamped);
+    scrollTop();
+  }, [diffFiles.length, scrollTop]);
+
   const handleFileClick = useCallback((filePath: string) => {
-    diffViewRef.current?.scrollToFile(filePath);
-  }, []);
+    const idx = filePaths.indexOf(filePath);
+    if (idx >= 0) goToFile(idx);
+  }, [filePaths, goToFile]);
+
+  const navigateFile = useCallback((direction: 1 | -1) => {
+    goToFile(safeIndex + direction);
+  }, [goToFile, safeIndex]);
+
+  const toggleCurrentReviewed = useCallback(() => {
+    if (currentPath == null) return;
+    if (currentReviewed) {
+      unmarkFileReviewed(currentPath);
+    } else {
+      markFileReviewed(currentPath);
+    }
+  }, [currentPath, currentReviewed, markFileReviewed, unmarkFileReviewed]);
 
   // Sorted comments for navigation — matches visual order on page
   const sortedComments = useMemo(() => {
     const fileOrder = new Map<string, number>();
-    diffFiles.forEach((f, i) => fileOrder.set(f.newPath || f.oldPath, i));
+    filePaths.forEach((p, i) => fileOrder.set(p, i));
 
     return [...comments].sort((a, b) => {
       // Overall comments first
@@ -298,7 +337,7 @@ function AppContent({
       // Then by start line
       return (a.startLine ?? 0) - (b.startLine ?? 0);
     });
-  }, [comments, diffFiles]);
+  }, [comments, filePaths]);
 
   const isFirstComment = commentIdx <= 0;
   const isLastComment = commentIdx >= sortedComments.length - 1;
@@ -310,43 +349,23 @@ function AppContent({
     const c = sortedComments[next];
     setActiveCommentId(c.id);
     setScrollDirection(direction === 1 ? 'forward' : 'backward');
-    // scrollIntoView in CommentWidget handles the actual scrolling.
-    // We only need scrollToFile to ensure the virtualizer renders the file's DOM.
-    // Use a flag to skip the file-level scroll and let the widget scroll precisely.
+    // Switch to the file that owns the comment; CommentWidget scrolls it into
+    // view once its file is shown.
     if (c.type === 'overall') {
-      document.querySelector('.diff-view-scroll')?.scrollTo({ top: 0 });
+      scrollTop();
     } else if (c.filePath) {
-      // Ensure the file is rendered by the virtualizer, then let CommentWidget scroll
-      diffViewRef.current?.scrollToFile(c.filePath);
+      const idx = filePaths.indexOf(c.filePath);
+      if (idx >= 0) setCurrentIndex(idx);
     }
-  }, [sortedComments, commentIdx]);
-
-  const navigateFile = useCallback((direction: 1 | -1) => {
-    if (!diffFiles.length) return;
-    // Find current visible file index — just cycle through
-    const fileNames = diffFiles.map((f) => f.newPath || f.oldPath);
-    // Simple: scroll to next/prev from start
-    const el = document.querySelector('.diff-view-scroll, .app-main');
-    const scrollTop = el?.scrollTop ?? 0;
-    // Use diffViewRef to scroll by index
-    const currentIdx = Math.max(0, fileNames.findIndex((_, i) => {
-      const node = document.querySelector(`[data-index="${i}"]`);
-      if (!node) return false;
-      return (node as HTMLElement).offsetTop >= scrollTop;
-    }));
-    const nextIdx = Math.max(0, Math.min(diffFiles.length - 1, currentIdx + direction));
-    const target = fileNames[nextIdx];
-    if (target) diffViewRef.current?.scrollToFile(target);
-  }, [diffFiles]);
+  }, [sortedComments, commentIdx, filePaths, scrollTop]);
 
   const handleAddOverallComment = useCallback(() => {
     // Scroll to top where overall comments section is
-    const el = document.querySelector('.app-main');
-    if (el) el.scrollTop = 0;
+    scrollTop();
     // Click the add button if it exists
     const btn = document.querySelector('.overall-comments .btn-add') as HTMLButtonElement | null;
     btn?.click();
-  }, []);
+  }, [scrollTop]);
 
   useKeyboardShortcuts({
     nextFile: () => navigateFile(1),
@@ -388,6 +407,29 @@ function AppContent({
             <code>{metadata.baseRef}..{metadata.headRef}</code>
           </h1>
           <div className="toolbar" role="toolbar" aria-label="Review toolbar">
+            <div className="toolbar-group">
+              <button className="btn toolbar-btn" onClick={() => navigateFile(-1)} type="button" title="Previous file (p)" disabled={safeIndex <= 0}>
+                <ChevronLeft size={14} aria-hidden="true" /> File
+              </button>
+              <span className="file-position" aria-live="polite" title={currentPath}>
+                {diffFiles.length > 0 ? `${safeIndex + 1} / ${diffFiles.length}` : '0 / 0'}
+              </span>
+              <button className="btn toolbar-btn" onClick={() => navigateFile(1)} type="button" title="Next file (n)" disabled={safeIndex >= diffFiles.length - 1}>
+                File <ChevronRight size={14} aria-hidden="true" />
+              </button>
+              <button
+                className={`btn toolbar-btn btn-review-toggle ${currentReviewed ? 'btn-reviewed' : ''}`}
+                onClick={toggleCurrentReviewed}
+                type="button"
+                disabled={currentPath == null}
+                title={currentReviewed ? 'Mark file as not reviewed' : 'Mark file as reviewed'}
+              >
+                {currentReviewed
+                  ? <><Check size={14} aria-hidden="true" /> Reviewed</>
+                  : <><Circle size={14} aria-hidden="true" /> Review</>}
+              </button>
+            </div>
+            <div className="toolbar-separator" />
             <div className="toolbar-group">
               <button className="btn toolbar-btn" onClick={() => navigateComment(-1)} type="button" title="Previous comment (k)" disabled={sortedComments.length === 0 || isFirstComment}>
                 <ChevronLeft size={14} aria-hidden="true" /> Comment
@@ -467,10 +509,10 @@ function AppContent({
         </div>
       </header>
       <div className="app-body">
-        <Sidebar files={fileChanges} onFileClick={handleFileClick} />
+        <Sidebar files={fileChanges} onFileClick={handleFileClick} activeFile={currentPath} />
         <div className="app-main">
           <OverallComments activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
-          <DiffView ref={diffViewRef} files={diffFiles} viewType={viewType} themeType={themeMode} syntaxTheme={syntaxTheme} activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
+          <DiffView files={diffFiles} currentIndex={safeIndex} viewType={viewType} themeType={themeMode} syntaxTheme={syntaxTheme} activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
         </div>
       </div>
       <StatusBar totalFiles={fileChanges.length} />
@@ -534,7 +576,7 @@ export function App(): React.JSX.Element {
     ])
       .then(([meta, diff]) => {
         setMetadata(meta);
-        setDiffFiles(diff.files ?? []);
+        setDiffFiles(sortDiffFiles(diff.files ?? []));
         setLoadState('ready');
       })
       .catch((err: Error) => {
@@ -553,7 +595,7 @@ export function App(): React.JSX.Element {
   const handleRefresh = useCallback(() => {
     fetchDiff(contextLevel)
       .then((diff) => {
-        setDiffFiles(diff.files ?? []);
+        setDiffFiles(sortDiffFiles(diff.files ?? []));
       })
       .catch((err: Error) => {
         toast.error('Refresh failed', { description: err.message });
@@ -567,7 +609,7 @@ export function App(): React.JSX.Element {
     } catch { /* ignore */ }
     fetchDiff(level)
       .then((diff) => {
-        setDiffFiles(diff.files ?? []);
+        setDiffFiles(sortDiffFiles(diff.files ?? []));
       })
       .catch((err: Error) => {
         toast.error('Failed to change context', { description: err.message });

@@ -108,6 +108,12 @@ export function FileDiff({
     setActiveForm(selectionToAnchor(range));
   }, []);
 
+  // The gutter "+" button emits a single-line range; open the comment form on
+  // that line (same anchor path as a drag selection).
+  const onGutterUtilityClick = useCallback((range: SelectedLineRange) => {
+    setActiveForm(selectionToAnchor(range));
+  }, []);
+
   const renderAnnotation = useCallback(
     (annotation: DiffLineAnnotation<DiffAnnotationMetadata>) => {
       const { comments, side, lineNumber } = annotation.metadata;
@@ -197,6 +203,7 @@ export function FileDiff({
             // interactions silently no-op.
             useTokenTransformer: true,
             onLineSelectionEnd,
+            onGutterUtilityClick,
           }}
           lineAnnotations={annotations}
           renderAnnotation={renderAnnotation}

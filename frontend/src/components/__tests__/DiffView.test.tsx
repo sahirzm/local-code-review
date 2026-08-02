@@ -47,21 +47,44 @@ function file(path: string): ParsedFileDiff {
 
 describe('DiffView', () => {
   it('renders a loading skeleton when files is null', () => {
-    render(<DiffView files={null} viewType="unified" themeType="dark" syntaxTheme={SYNTAX_THEME} />, { wrapper });
+    render(<DiffView files={null} currentIndex={0} viewType="unified" themeType="dark" syntaxTheme={SYNTAX_THEME} />, { wrapper });
     expect(screen.getByRole('status', { name: 'Loading diffs' })).toBeTruthy();
   });
 
   it('renders an empty state when there are no files', () => {
-    render(<DiffView files={[]} viewType="unified" themeType="dark" syntaxTheme={SYNTAX_THEME} />, { wrapper });
+    render(<DiffView files={[]} currentIndex={0} viewType="unified" themeType="dark" syntaxTheme={SYNTAX_THEME} />, { wrapper });
     expect(screen.getByText('No files changed')).toBeTruthy();
   });
 
-  it('renders a virtualized scroll container for files', () => {
-    const { container } = render(
-      <DiffView files={[file('a.ts')]} viewType="unified" themeType="dark" syntaxTheme={SYNTAX_THEME} />,
+  it('renders only the file at currentIndex (single-file view)', () => {
+    render(
+      <DiffView
+        files={[file('a.ts'), file('b.ts'), file('c.ts')]}
+        currentIndex={1}
+        viewType="unified"
+        themeType="dark"
+        syntaxTheme={SYNTAX_THEME}
+      />,
       { wrapper },
     );
-    expect(container.querySelector('.diff-view-scroll')).not.toBeNull();
-    expect(container.querySelector('.diff-view-inner')).not.toBeNull();
+    // Exactly one file surface is mounted, and it is the selected one.
+    expect(screen.getByText('b.ts')).toBeTruthy();
+    expect(screen.queryByText('a.ts')).toBeNull();
+    expect(screen.queryByText('c.ts')).toBeNull();
+  });
+
+  it('clamps an out-of-range currentIndex to the last file', () => {
+    render(
+      <DiffView
+        files={[file('a.ts'), file('b.ts')]}
+        currentIndex={99}
+        viewType="unified"
+        themeType="dark"
+        syntaxTheme={SYNTAX_THEME}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByText('b.ts')).toBeTruthy();
+    expect(screen.queryByText('a.ts')).toBeNull();
   });
 });
