@@ -23,10 +23,10 @@ echo "--- Step 1: Frontend ---"
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
 if [ -f "$FRONTEND_DIR/package.json" ]; then
 	cd "$FRONTEND_DIR"
-	if [ ! -d "node_modules" ]; then
-		echo "Installing frontend dependencies..."
-		npm install
-	fi
+	# Always install so newly added dependencies are picked up; npm install is a
+	# fast no-op when node_modules already satisfies package.json.
+	echo "Installing frontend dependencies..."
+	npm install
 	echo "Building frontend with Vite..."
 	npx vite build
 	echo "Frontend built to: $FRONTEND_DIR/dist"
