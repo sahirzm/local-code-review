@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Trash2, Check, Circle, MessageSquarePlus, RefreshCw, Columns2, AlignJustify,
-  ChevronLeft, ChevronRight, HelpCircle, X, AlertTriangle,
+  Trash2, Check, Circle, MessageSquarePlus, MessageSquare, RefreshCw, Columns2, AlignJustify,
+  ChevronLeft, ChevronRight, HelpCircle, X, AlertTriangle, Settings, FileText,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { Modal } from './components/ui/Modal.js';
@@ -163,8 +163,8 @@ function DoneButton({ metadata, onFinish }: { metadata: ReviewMetadata; onFinish
 
   return (
     <>
-      <button className="btn btn-done" onClick={() => setShowConfirm(true)} type="button">
-        <Check size={15} aria-hidden="true" /> Done
+      <button className="btn btn-done btn-done-icon" onClick={() => setShowConfirm(true)} type="button" aria-label="Done" title="Done">
+        <Check size={16} aria-hidden="true" />
       </button>
       <Modal
         open={showConfirm}
@@ -208,6 +208,98 @@ function ShortcutHelpModal({ open, onOpenChange }: { open: boolean; onOpenChange
         </tbody>
       </table>
       <p className="shortcut-help-note">Shortcuts are disabled when typing in a text field.</p>
+    </Modal>
+  );
+}
+
+interface SettingsModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  viewType: ViewType;
+  onToggleView: () => void;
+  theme: ThemeId;
+  onSelectTheme: (id: ThemeId) => void;
+  contextLevel: ContextLevel;
+  onSelectContext: (level: ContextLevel) => void;
+  fontSize: number;
+  onChangeFontSize: (delta: number) => void;
+  onOpenShortcuts: () => void;
+}
+
+function SettingsModal({
+  open, onOpenChange, viewType, onToggleView, theme, onSelectTheme,
+  contextLevel, onSelectContext, fontSize, onChangeFontSize, onOpenShortcuts,
+}: SettingsModalProps): React.JSX.Element {
+  return (
+    <Modal open={open} onOpenChange={onOpenChange} ariaLabel="Settings" dialogClassName="settings-dialog">
+      <div className="settings-header">
+        <h2>Settings</h2>
+        <button type="button" className="btn-icon" onClick={() => onOpenChange(false)} aria-label="Close"><X size={16} aria-hidden="true" /></button>
+      </div>
+      <div className="settings-body">
+        <div className="settings-row">
+          <span className="settings-label" id="settings-view-label">View</span>
+          <button className="view-toggle" onClick={onToggleView} type="button" aria-labelledby="settings-view-label" title="Toggle view mode (d)">
+            {viewType === 'split'
+              ? <><Columns2 size={14} aria-hidden="true" /> Split</>
+              : <><AlignJustify size={14} aria-hidden="true" /> Unified</>}
+          </button>
+        </div>
+        <div className="settings-row">
+          <label className="settings-label" htmlFor="settings-theme">Theme</label>
+          <select
+            id="settings-theme"
+            className="theme-select"
+            value={theme}
+            onChange={(e) => onSelectTheme(e.target.value as ThemeId)}
+            aria-label="Select color theme"
+          >
+            <optgroup label="Dark">
+              {THEMES.filter((t) => t.mode === 'dark').map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Light">
+              {THEMES.filter((t) => t.mode === 'light').map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
+        <div className="settings-row">
+          <span className="settings-label" id="settings-fontsize-label">Font size</span>
+          <div className="font-size-control" role="group" aria-labelledby="settings-fontsize-label">
+            <button className="btn toolbar-btn font-size-btn" onClick={() => onChangeFontSize(-1)} type="button" aria-label="Decrease diff font size" title="Decrease font size" disabled={fontSize <= MIN_FONT_SIZE}>
+              A−
+            </button>
+            <span className="font-size-value" aria-live="polite" title="Diff font size">{fontSize}px</span>
+            <button className="btn toolbar-btn font-size-btn" onClick={() => onChangeFontSize(1)} type="button" aria-label="Increase diff font size" title="Increase font size" disabled={fontSize >= MAX_FONT_SIZE}>
+              A+
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <label className="settings-label" htmlFor="settings-context">Context lines</label>
+          <select
+            id="settings-context"
+            className="context-select"
+            value={String(contextLevel)}
+            onChange={(e) => onSelectContext(e.target.value === 'full' ? 'full' : Number(e.target.value) as ContextLevel)}
+            aria-label="Diff context lines"
+          >
+            {CONTEXT_LEVELS.map((level) => (
+              <option key={level} value={String(level)}>
+                {level === 'full' ? 'Full context' : `${level} lines`}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="settings-footer">
+        <button type="button" className="btn btn-cancel settings-shortcuts-btn" onClick={onOpenShortcuts}>
+          <HelpCircle size={14} aria-hidden="true" /> Keyboard shortcuts
+        </button>
+      </div>
     </Modal>
   );
 }
@@ -264,9 +356,15 @@ function AppContent({
   onChangeFontSize: (delta: number) => void;
 }): React.JSX.Element {
   const { viewMode, setViewMode, comments, isFileReviewed, markFileReviewed, unmarkFileReviewed } = useReviewStore();
+  // Must run inside DiffWorkerPoolProvider: in worker-pool mode pierre reads its
+  // highlight theme from the pool's render options, not the per-file `theme`
+  // prop. Called from App() (outside the provider) the hook is a no-op and the
+  // diff stays on pierre's default theme regardless of the selected one.
+  useWorkerPoolThemeSync(syntaxTheme);
   const [viewType, setViewType] = useResponsiveViewType(viewMode as ViewType);
   const quota = useQuotaMonitor();
   const [showHelp, setShowHelp] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [showRefreshWarn, setShowRefreshWarn] = useState(false);
   const [commentIdx, setCommentIdx] = useState(-1);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
@@ -407,15 +505,16 @@ function AppContent({
             <code>{metadata.baseRef}..{metadata.headRef}</code>
           </h1>
           <div className="toolbar" role="toolbar" aria-label="Review toolbar">
-            <div className="toolbar-group">
-              <button className="btn toolbar-btn" onClick={() => navigateFile(-1)} type="button" title="Previous file (p)" disabled={safeIndex <= 0}>
-                <ChevronLeft size={14} aria-hidden="true" /> File
+            <div className="toolbar-group" role="group" aria-label="File navigation">
+              <span className="toolbar-nav-icon" aria-hidden="true"><FileText size={15} /></span>
+              <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateFile(-1)} type="button" title="Previous file (p)" aria-label="Previous file" disabled={safeIndex <= 0}>
+                <ChevronLeft size={14} aria-hidden="true" />
               </button>
               <span className="file-position" aria-live="polite" title={currentPath}>
                 {diffFiles.length > 0 ? `${safeIndex + 1} / ${diffFiles.length}` : '0 / 0'}
               </span>
-              <button className="btn toolbar-btn" onClick={() => navigateFile(1)} type="button" title="Next file (n)" disabled={safeIndex >= diffFiles.length - 1}>
-                File <ChevronRight size={14} aria-hidden="true" />
+              <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateFile(1)} type="button" title="Next file (n)" aria-label="Next file" disabled={safeIndex >= diffFiles.length - 1}>
+                <ChevronRight size={14} aria-hidden="true" />
               </button>
               <button
                 className={`btn toolbar-btn btn-review-toggle ${currentReviewed ? 'btn-reviewed' : ''}`}
@@ -430,12 +529,13 @@ function AppContent({
               </button>
             </div>
             <div className="toolbar-separator" />
-            <div className="toolbar-group">
-              <button className="btn toolbar-btn" onClick={() => navigateComment(-1)} type="button" title="Previous comment (k)" disabled={sortedComments.length === 0 || isFirstComment}>
-                <ChevronLeft size={14} aria-hidden="true" /> Comment
+            <div className="toolbar-group" role="group" aria-label="Comment navigation">
+              <span className="toolbar-nav-icon" aria-hidden="true"><MessageSquare size={15} /></span>
+              <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateComment(-1)} type="button" title="Previous comment (k)" aria-label="Previous comment" disabled={sortedComments.length === 0 || isFirstComment}>
+                <ChevronLeft size={14} aria-hidden="true" />
               </button>
-              <button className="btn toolbar-btn" onClick={() => navigateComment(1)} type="button" title="Next comment (j)" disabled={sortedComments.length === 0 || isLastComment}>
-                Comment <ChevronRight size={14} aria-hidden="true" />
+              <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateComment(1)} type="button" title="Next comment (j)" aria-label="Next comment" disabled={sortedComments.length === 0 || isLastComment}>
+                <ChevronRight size={14} aria-hidden="true" />
               </button>
             </div>
             <div className="toolbar-separator" />
@@ -449,59 +549,11 @@ function AppContent({
             </div>
             <div className="toolbar-separator" />
             <div className="toolbar-group">
-              <button className="view-toggle" onClick={handleToggleView} type="button" title="Toggle view mode (d)">
-                {viewType === 'split'
-                  ? <><Columns2 size={14} aria-hidden="true" /> Split</>
-                  : <><AlignJustify size={14} aria-hidden="true" /> Unified</>}
-              </button>
-              <select
-                className="context-select"
-                value={String(contextLevel)}
-                onChange={(e) => onSelectContext(e.target.value === 'full' ? 'full' : Number(e.target.value) as ContextLevel)}
-                aria-label="Diff context lines"
-                title="Context lines"
-              >
-                {CONTEXT_LEVELS.map((level) => (
-                  <option key={level} value={String(level)}>
-                    {level === 'full' ? 'Full context' : `${level} lines`}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="theme-select"
-                value={theme}
-                onChange={(e) => onSelectTheme(e.target.value as ThemeId)}
-                aria-label="Select color theme"
-                title="Color theme"
-              >
-                <optgroup label="Dark">
-                  {THEMES.filter((t) => t.mode === 'dark').map((t) => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Light">
-                  {THEMES.filter((t) => t.mode === 'light').map((t) => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
-                  ))}
-                </optgroup>
-              </select>
-              <div className="font-size-control" role="group" aria-label="Diff font size">
-                <button className="btn toolbar-btn font-size-btn" onClick={() => onChangeFontSize(-1)} type="button" aria-label="Decrease diff font size" title="Decrease font size" disabled={fontSize <= MIN_FONT_SIZE}>
-                  A−
-                </button>
-                <span className="font-size-value" aria-live="polite" title="Diff font size">{fontSize}px</span>
-                <button className="btn toolbar-btn font-size-btn" onClick={() => onChangeFontSize(1)} type="button" aria-label="Increase diff font size" title="Increase font size" disabled={fontSize >= MAX_FONT_SIZE}>
-                  A+
-                </button>
-              </div>
-              <Tooltip label="Keyboard shortcuts (?)">
-                <button className="btn toolbar-btn toolbar-help-btn" onClick={() => setShowHelp(true)} type="button" aria-label="Keyboard shortcuts">
-                  <HelpCircle size={15} aria-hidden="true" />
+              <Tooltip label="Settings">
+                <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => setShowSettings(true)} type="button" aria-label="Settings">
+                  <Settings size={15} aria-hidden="true" />
                 </button>
               </Tooltip>
-            </div>
-            <div className="toolbar-separator" />
-            <div className="toolbar-group">
               <DiscardButton />
               <DoneButton metadata={metadata} onFinish={onFinish} />
             </div>
@@ -516,6 +568,19 @@ function AppContent({
         </div>
       </div>
       <StatusBar totalFiles={fileChanges.length} />
+      <SettingsModal
+        open={showSettings}
+        onOpenChange={setShowSettings}
+        viewType={viewType}
+        onToggleView={handleToggleView}
+        theme={theme}
+        onSelectTheme={onSelectTheme}
+        contextLevel={contextLevel}
+        onSelectContext={onSelectContext}
+        fontSize={fontSize}
+        onChangeFontSize={onChangeFontSize}
+        onOpenShortcuts={() => { setShowSettings(false); setShowHelp(true); }}
+      />
       <ShortcutHelpModal open={showHelp} onOpenChange={setShowHelp} />
       <Modal open={showRefreshWarn} onOpenChange={setShowRefreshWarn} ariaLabel="Refresh warning" dialogClassName="modal-dialog">
         <h2>Refresh diff?</h2>
@@ -545,7 +610,6 @@ export function App(): React.JSX.Element {
 
   const themeMode = THEMES.find((t) => t.id === theme)?.mode ?? 'dark';
   const syntaxTheme = useMemo(() => resolveShikiTheme(theme), [theme]);
-  useWorkerPoolThemeSync(syntaxTheme);
 
   useEffect(() => {
     cleanExpiredSessions();
@@ -553,7 +617,11 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.style.setProperty('--diff-font-size', `${fontSize}px`);
+    // `--diffs-font-size`/`--diffs-line-height` are what @pierre/diffs reads
+    // inside its shadow DOM (custom properties pierce the shadow boundary);
+    // line-height tracks pierre's own 13px→20px ratio so rows stay legible.
+    document.documentElement.style.setProperty('--diffs-font-size', `${fontSize}px`);
+    document.documentElement.style.setProperty('--diffs-line-height', `${Math.round(fontSize * (20 / 13))}px`);
     savePreferences({ theme, fontSize });
   }, [theme, fontSize]);
 
@@ -669,7 +737,7 @@ export function App(): React.JSX.Element {
           onContinue={handleContinue}
         />
       ) : (
-        <DiffWorkerPoolProvider>
+        <DiffWorkerPoolProvider syntaxTheme={syntaxTheme}>
           <AppContent
             metadata={metadata}
             diffFiles={diffFiles}

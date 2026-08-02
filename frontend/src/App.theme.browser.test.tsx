@@ -11,6 +11,12 @@ async function waitForApp(screen: ReturnType<typeof render>): Promise<void> {
   await expect.element(screen.getByText('demo-repo')).toBeInTheDocument();
 }
 
+// Theme, font size, and context controls now live behind the toolbar gear.
+async function openSettings(screen: ReturnType<typeof render>): Promise<void> {
+  await screen.getByLabelText('Settings').click();
+  await expect.element(screen.getByLabelText('Select color theme')).toBeInTheDocument();
+}
+
 function bodyBg(): string {
   return getComputedStyle(document.body).backgroundColor;
 }
@@ -39,6 +45,7 @@ describe('theme selector (browser)', () => {
   it('switches to Catppuccin Mocha and updates the background', async () => {
     const screen = render(<App />);
     await waitForApp(screen);
+    await openSettings(screen);
 
     const select = screen.getByLabelText('Select color theme');
     await select.selectOptions('Catppuccin Mocha');
@@ -51,6 +58,7 @@ describe('theme selector (browser)', () => {
   it('switches to a light theme', async () => {
     const screen = render(<App />);
     await waitForApp(screen);
+    await openSettings(screen);
 
     const select = screen.getByLabelText('Select color theme');
     await select.selectOptions('Default Light');
@@ -63,6 +71,7 @@ describe('theme selector (browser)', () => {
   it('persists the chosen theme to localStorage', async () => {
     const screen = render(<App />);
     await waitForApp(screen);
+    await openSettings(screen);
 
     const select = screen.getByLabelText('Select color theme');
     await select.selectOptions('Catppuccin Latte');

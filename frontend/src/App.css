@@ -289,11 +289,21 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  /* Below the toolbar's intrinsic width the toolbar wraps to its own line
+     instead of overflowing the header horizontally. */
+  flex-wrap: wrap;
 }
 
 .header h1 {
   font-size: 1.125rem;
   color: var(--color-text-heading);
+  /* Let the title shrink and ellipsis instead of pushing the toolbar off the
+     row: a long ref/path was overflowing the header before. */
+  min-width: 0;
+  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header code {
@@ -527,11 +537,6 @@ body {
 
 .show-diff-btn:hover {
   background: var(--color-panel-hover);
-}
-
-.diff {
-  font-size: var(--diff-font-size, 0.8125rem);
-  line-height: 1.5;
 }
 
 .hunk-separator {
@@ -930,6 +935,15 @@ body {
 
 .btn-done:hover {
   background: var(--color-success);
+}
+
+/* Icon-only Done: the success color already reads as the primary action, so
+   drop the label and square up the button to match the other icon buttons. */
+.btn-done-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
 }
 
 /* ===== Modal Overlay (shared) ===== */
@@ -1396,13 +1410,17 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-shrink: 0;
+  /* Wrap controls onto additional rows on very narrow viewports rather than
+     overflowing; each group stays intact via nowrap below. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .toolbar-group {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: nowrap;
 }
 
 .toolbar-separator {
@@ -1431,10 +1449,21 @@ body {
   cursor: not-allowed;
 }
 
-.toolbar-help-btn {
-  font-weight: 700;
+/* Icon-only toolbar buttons (nav arrows, settings gear): square-ish, centered,
+   no text so the toolbar stays compact and never overflows the header. */
+.toolbar-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 28px;
-  text-align: center;
+  padding: 5px 7px;
+}
+
+/* Leading glyph that labels each nav group (file / comment) in place of text. */
+.toolbar-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-subtle);
 }
 
 /* ===== Diff Font Size Control ===== */
@@ -1512,6 +1541,60 @@ body {
   margin-top: 12px;
   font-size: 0.75rem;
   color: var(--color-text-muted);
+}
+
+/* ===== Settings Modal ===== */
+.settings-dialog {
+  background: var(--color-panel);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  max-width: 380px;
+  width: 90%;
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.settings-header h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-label {
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+.settings-footer {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.settings-shortcuts-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ===== Status Bar ===== */

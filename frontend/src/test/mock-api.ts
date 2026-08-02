@@ -15,7 +15,7 @@ const FILE_CHANGES: FileChange[] = [
   { path: 'package.json', status: 'modified', additions: 1, deletions: 0 },
 ];
 
-function metadata(): ReviewMetadata {
+function metadata(overrides: Partial<ReviewMetadata> = {}): ReviewMetadata {
   return {
     repoName: 'demo-repo',
     commitRange: 'main..feature',
@@ -24,6 +24,7 @@ function metadata(): ReviewMetadata {
     files: FILE_CHANGES,
     timestamp: '2026-01-01T00:00:00.000Z',
     csrfToken: CSRF,
+    ...overrides,
   };
 }
 
@@ -92,12 +93,12 @@ export interface MockApiHandle {
  * from in-memory fixtures, so browser tests need no backend. Call `restore()`
  * in test teardown.
  */
-export function mockApi(): MockApiHandle {
+export function mockApi(metadataOverrides: Partial<ReviewMetadata> = {}): MockApiHandle {
   const original = window.fetch;
 
   window.fetch = ((input: RequestInfo | URL): Promise<Response> => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    if (url.includes('/api/v1/metadata')) return Promise.resolve(jsonResponse(metadata()));
+    if (url.includes('/api/v1/metadata')) return Promise.resolve(jsonResponse(metadata(metadataOverrides)));
     if (url.includes('/api/v1/diff')) return Promise.resolve(jsonResponse(diff()));
     if (url.includes('/api/v1/finish')) return Promise.resolve(jsonResponse(finish()));
     if (url.includes('/api/v1/shutdown')) return Promise.resolve(jsonResponse({ success: true }));

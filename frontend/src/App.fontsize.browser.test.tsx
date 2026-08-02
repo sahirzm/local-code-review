@@ -11,11 +11,17 @@ const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 20;
 
 function diffFontSizeVar(): string {
-  return document.documentElement.style.getPropertyValue('--diff-font-size').trim();
+  return document.documentElement.style.getPropertyValue('--diffs-font-size').trim();
 }
 
 async function waitForApp(screen: ReturnType<typeof render>): Promise<void> {
   await expect.element(screen.getByText('demo-repo')).toBeInTheDocument();
+}
+
+// The font size control now lives behind the toolbar gear.
+async function openSettings(screen: ReturnType<typeof render>): Promise<void> {
+  await screen.getByLabelText('Settings').click();
+  await expect.element(screen.getByLabelText('Increase diff font size')).toBeInTheDocument();
 }
 
 describe('diff font size control (browser)', () => {
@@ -23,7 +29,8 @@ describe('diff font size control (browser)', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    document.documentElement.style.removeProperty('--diff-font-size');
+    document.documentElement.style.removeProperty('--diffs-font-size');
+    document.documentElement.style.removeProperty('--diffs-line-height');
     api = mockApi();
   });
 
@@ -40,6 +47,7 @@ describe('diff font size control (browser)', () => {
   it('increases and decreases the font size', async () => {
     const screen = render(<App />);
     await waitForApp(screen);
+    await openSettings(screen);
 
     await screen.getByLabelText('Increase diff font size').click();
     expect(diffFontSizeVar()).toBe(`${DEFAULT_FONT_SIZE + 1}px`);
@@ -52,6 +60,7 @@ describe('diff font size control (browser)', () => {
   it('clamps at the maximum and disables the increase button', async () => {
     const screen = render(<App />);
     await waitForApp(screen);
+    await openSettings(screen);
 
     const increase = screen.getByLabelText('Increase diff font size');
     for (let i = 0; i < MAX_FONT_SIZE - DEFAULT_FONT_SIZE + 3; i++) {
@@ -65,6 +74,7 @@ describe('diff font size control (browser)', () => {
   it('clamps at the minimum and disables the decrease button', async () => {
     const screen = render(<App />);
     await waitForApp(screen);
+    await openSettings(screen);
 
     const decrease = screen.getByLabelText('Decrease diff font size');
     for (let i = 0; i < DEFAULT_FONT_SIZE - MIN_FONT_SIZE + 3; i++) {
@@ -75,9 +85,43 @@ describe('diff font size control (browser)', () => {
     await expect.element(decrease).toBeDisabled();
   });
 
+  it('drives the rendered diff font size inside the pierre shadow DOM', async () => {
+    const screen = render(<App />);
+    await waitForApp(screen);
+
+    // Pierre reads `--diffs-font-size` on its shadow host (`:host { font-size:
+    // var(--diffs-font-size,13px) }`); the custom property inherits through the
+    // shadow boundary from documentElement. Find the deepest host that resolves
+    // to the current font size, then assert it tracks the control.
+    const shadowHostFontSize = (): number | null => {
+      let found: number | null = null;
+      const walk = (root: ParentNode): void => {
+        for (const el of root.querySelectorAll('*')) {
+          if (el.shadowRoot) {
+            found = parseFloat(getComputedStyle(el).fontSize);
+            walk(el.shadowRoot);
+          }
+        }
+      };
+      walk(document);
+      return found;
+    };
+
+    await expect
+      .poll(() => shadowHostFontSize(), { timeout: 15_000, interval: 250 })
+      .toBe(DEFAULT_FONT_SIZE);
+
+    await openSettings(screen);
+    await screen.getByLabelText('Increase diff font size').click();
+    await expect
+      .poll(() => shadowHostFontSize(), { timeout: 5_000, interval: 100 })
+      .toBe(DEFAULT_FONT_SIZE + 1);
+  });
+
   it('persists the font size to localStorage', async () => {
     const screen = render(<App />);
     await waitForApp(screen);
+    await openSettings(screen);
 
     await screen.getByLabelText('Increase diff font size').click();
 
