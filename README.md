@@ -104,12 +104,86 @@ Output goes to stdout; server logs go to stderr. This means `local-review > revi
 | `-V, --version` | Print version and exit | — |
 | `--help` | Print usage and exit | — |
 
+Subcommand: `local-review mcp` runs as an MCP server (see
+[MCP server](#mcp-server-review-from-your-ai-agent)).
+
 ### TUI keys
 
 `n`/`p` file · `↑`/`↓` line cursor · `j`/`k` comment · `c` line comment ·
 `v` set range anchor (then `c`) · `F` file comment · `O` overall · `e` edit ·
 `x`/`Del` delete · `r` reviewed · `s` sidebar · `d` split/unified · `t`/`T` theme ·
 `+`/`-` diff context · `?` help · `q` quit (saves session + exports markdown).
+
+## MCP server (review from your AI agent)
+
+Instead of running `local-review` yourself and copy-pasting the exported
+markdown into your AI coding agent, the agent can launch the review directly.
+`local-review mcp` runs as an [MCP](https://modelcontextprotocol.io) server over
+stdio, exposing a single **`start_review`** tool:
+
+1. The agent calls `start_review` (optionally choosing what to review).
+2. `local-review` computes the diff and opens the browser review UI, exactly
+   like the CLI.
+3. The tool call **blocks** while you review and comment.
+4. When you click **Finish**, the generated markdown is returned to the agent as
+   the tool result — no copy-paste.
+
+The `.local-review/<timestamp>.md` file is still written for the record.
+
+### Install
+
+```bash
+scripts/install-mcp.sh              # build + register with detected agents (user scope)
+scripts/install-mcp.sh --scope project   # register in the current repo
+scripts/install-mcp.sh --no-build        # use an already-installed local-review
+```
+
+The script auto-detects **Claude Code**, **Kiro CLI**, **opencode**, and
+**pi.dev**, and registers whichever are present.
+
+### Manual registration
+
+All four agents speak MCP over stdio; the server is `local-review mcp`.
+
+**Claude Code** — `claude mcp add local-review -- local-review mcp`, or `.mcp.json`:
+
+```json
+{ "mcpServers": { "local-review": { "type": "stdio", "command": "local-review", "args": ["mcp"] } } }
+```
+
+**Kiro CLI** — `.kiro/settings/mcp.json` (or `~/.kiro/settings/mcp.json`):
+
+```json
+{ "mcpServers": { "local-review": { "command": "local-review", "args": ["mcp"], "disabled": false, "autoApprove": ["start_review"] } } }
+```
+
+**opencode** — `opencode.json` (or `~/.config/opencode/opencode.json`):
+
+```json
+{ "$schema": "https://opencode.ai/config.json", "mcp": { "local-review": { "type": "local", "command": ["local-review", "mcp"], "enabled": true } } }
+```
+
+**pi.dev** — pi has no native MCP client; use the
+[`pi-mcp-adapter`](https://pi.dev/packages/pi-mcp-adapter) package to bridge the
+stdio server (`command: "local-review", args: ["mcp"]`).
+
+### `start_review` arguments
+
+All optional; an empty call reviews the default range (last pushed commit..HEAD),
+matching bare `local-review`.
+
+| Argument | Description |
+|----------|-------------|
+| `mode` | `staged` \| `unstaged` \| `working` \| `all` \| `commits` |
+| `base` | Base ref to diff against |
+| `commit1` / `commit2` | Explicit commit range (with `mode: "commits"`) |
+| `context` | Unified diff context lines |
+| `fetch` | Run `git fetch` first |
+| `include_untracked` | Include untracked files (with `mode: "all"`) |
+
+Because a human review can take a while, MCP-launched reviews disable the
+30-minute idle timeout — the server stops only when you finish. Some agents cap
+MCP tool-call duration; raise their MCP tool timeout if a long review is cut off.
 
 ### Configuration
 

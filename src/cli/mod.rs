@@ -1,4 +1,4 @@
-use clap::{ArgAction, Parser};
+use clap::{ArgAction, Parser, Subcommand};
 use crate::types::CliOptions;
 
 fn port_in_range(s: &str) -> Result<u16, String> {
@@ -72,6 +72,23 @@ pub struct Cli {
     /// Serve frontend from this directory instead of the embedded assets (dev override)
     #[arg(long = "frontend-dir", value_name = "DIR", hide = true)]
     pub frontend_dir: Option<String>,
+
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+/// Subcommands. Absent → the default review flow (web server or `--tui`).
+#[derive(Subcommand, Debug, PartialEq)]
+pub enum Command {
+    /// Run as an MCP (Model Context Protocol) server over stdio, exposing a
+    /// blocking `start_review` tool that an AI agent can call.
+    Mcp,
+}
+
+/// Parse argv into the raw `Cli`, so callers can branch on `command` before
+/// converting to `CliOptions`.
+pub fn parse_cli() -> Cli {
+    Cli::parse()
 }
 
 /// Parse argv into `CliOptions`. `default_context` (from the shared config)
@@ -81,7 +98,7 @@ pub fn parse_args(default_context: u32) -> anyhow::Result<CliOptions> {
     cli_to_options(Cli::parse(), default_context)
 }
 
-fn cli_to_options(cli: Cli, default_context: u32) -> anyhow::Result<CliOptions> {
+pub fn cli_to_options(cli: Cli, default_context: u32) -> anyhow::Result<CliOptions> {
     let mode_flags = [cli.staged, cli.unstaged, cli.working, cli.all]
         .iter()
         .filter(|&&x| x)
@@ -297,6 +314,19 @@ mod tests {
         assert_eq!(cli_to_options(cli, 3).unwrap().context, 8);
         let cli = Cli::try_parse_from(["local-review", "--context", "0"]).unwrap();
         assert_eq!(cli_to_options(cli, 3).unwrap().context, 0);
+    }
+
+    #[test]
+    fn no_subcommand_by_default() {
+        let cli = Cli::try_parse_from(["local-review", "--staged"]).unwrap();
+        assert!(cli.command.is_none());
+        assert!(cli.staged);
+    }
+
+    #[test]
+    fn parses_mcp_subcommand() {
+        let cli = Cli::try_parse_from(["local-review", "mcp"]).unwrap();
+        assert_eq!(cli.command, Some(Command::Mcp));
     }
 
     #[test]

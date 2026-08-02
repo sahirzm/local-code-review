@@ -12,13 +12,27 @@ pub struct Shutdown {
     idle_active: Arc<AtomicBool>,
 }
 
+/// Default idle timeout for CLI-launched reviews.
+pub const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
 impl Shutdown {
     pub fn new() -> Self {
+        Self::with_timeout(Some(DEFAULT_IDLE_TIMEOUT))
+    }
+
+    /// Build a `Shutdown` with a custom idle timeout. `None` disables the idle
+    /// timeout entirely — used for MCP-launched reviews, where a human may take
+    /// arbitrarily long and only an explicit finish should stop the server.
+    pub fn with_timeout(idle_timeout: Option<Duration>) -> Self {
         let shutdown = Shutdown {
             idle_reset: Arc::new(Notify::new()),
             shutdown_signal: Arc::new(Notify::new()),
             shutdown_flag: Arc::new(AtomicBool::new(false)),
             idle_active: Arc::new(AtomicBool::new(true)),
+        };
+
+        let Some(idle_timeout) = idle_timeout else {
+            return shutdown;
         };
 
         let idle_reset = shutdown.idle_reset.clone();
@@ -27,7 +41,6 @@ impl Shutdown {
         let idle_active = shutdown.idle_active.clone();
 
         tokio::spawn(async move {
-            let idle_timeout = Duration::from_secs(30 * 60);
             loop {
                 if shutdown_flag.load(Ordering::SeqCst) {
                     break;
@@ -35,7 +48,7 @@ impl Shutdown {
                 tokio::select! {
                     _ = time::sleep(idle_timeout) => {
                         if idle_active.load(Ordering::SeqCst) {
-                            eprintln!("Idle timeout reached (30 min), shutting down");
+                            eprintln!("Idle timeout reached, shutting down");
                             shutdown_flag.store(true, Ordering::SeqCst);
                             shutdown_signal.notify_waiters();
                             break;
@@ -102,6 +115,17 @@ mod tests {
             src.contains("Duration::from_secs(30 * 60)"),
             "expected 30-minute idle timeout literal in source"
         );
+    }
+
+    #[tokio::test]
+    async fn disabled_timeout_still_resolves_on_explicit_signal() {
+        // with_timeout(None) spawns no idle task; an explicit signal must still
+        // wake wait_for_shutdown.
+        let s = Shutdown::with_timeout(None);
+        s.signal_shutdown();
+        tokio::time::timeout(Duration::from_secs(1), s.wait_for_shutdown())
+            .await
+            .expect("wait_for_shutdown should resolve after signal with no idle task");
     }
 
     #[tokio::test]

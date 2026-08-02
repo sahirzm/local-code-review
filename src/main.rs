@@ -1,6 +1,4 @@
 use std::io::{IsTerminal, Write};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 fn prompt_include_untracked(git: &git::GitModule) -> anyhow::Result<bool> {
     let untracked = git.list_untracked().unwrap_or_default();
@@ -33,12 +31,19 @@ fn prompt_include_untracked(git: &git::GitModule) -> anyhow::Result<bool> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    // Logs go to stderr; in MCP mode stdout is reserved for JSON-RPC framing.
+    tracing_subscriber::fmt().with_writer(std::io::stderr).init();
+
+    let cli = cli::parse_cli();
+
+    if let Some(cli::Command::Mcp) = cli.command {
+        return mcp::run().await;
+    }
 
     // Load shared config first so the CLI can fall back to its diff-context
     // preference when `-U` is not passed.
     let app_config = config::Config::load();
-    let options = cli::parse_args(app_config.diff_context_lines)?;
+    let options = cli::cli_to_options(cli, app_config.diff_context_lines)?;
     let cwd = std::env::current_dir()?;
     let cwd_str = cwd.to_string_lossy().to_string();
 
@@ -47,6 +52,46 @@ async fn main() -> anyhow::Result<()> {
         std::process::exit(1);
     }
 
+    if options.tui {
+        return run_tui_mode(options, app_config, &cwd, cwd_str).await;
+    }
+
+    let no_open = options.no_open;
+    let port = options.port;
+
+    // The `all` mode's untracked-file choice may prompt on stdin; resolve it here
+    // (outside any terminal takeover) before building the server state.
+    let include_untracked = if options.all {
+        let git = git::GitModule::new(&cwd_str)?;
+        prompt_include_untracked(&git)?
+    } else {
+        false
+    };
+
+    let git = git::GitModule::new(&cwd_str)?;
+    let inputs = review::ReviewInputs {
+        options,
+        config: app_config,
+        finish_tx: None,
+    };
+    let state = review::build_server_state(&inputs, git, &cwd, include_untracked).await?;
+
+    let (_port, shutdown, _handle) =
+        review::start_and_open(state, port, no_open, server::Shutdown::new()).await?;
+
+    shutdown.wait_for_shutdown().await;
+    Ok(())
+}
+
+/// The `--tui` path: resolve the diff in-process and hand it to the terminal UI.
+/// Kept separate from the web path because the TUI consumes the git module and
+/// parsed diffs directly rather than a `ServerState`.
+async fn run_tui_mode(
+    options: types::CliOptions,
+    app_config: config::Config,
+    cwd: &std::path::Path,
+    cwd_str: String,
+) -> anyhow::Result<()> {
     let git = git::GitModule::new(&cwd_str)?;
 
     if options.fetch {
@@ -56,11 +101,9 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let range = git::resolve_range::resolve_range(&options, &git).await?;
+    let range = git::resolve_range::resolve_range(&options, &git)?;
     eprintln!("Resolved range: mode={} args={:?}", range.mode, range.args);
 
-    // Captured here (outside any TUI terminal takeover) because it may prompt
-    // on stdin; reused by the TUI re-diff path.
     let mut include_untracked = false;
     let raw_diff = match range.mode.as_str() {
         "staged" => git.get_staged_diff(options.context)?,
@@ -93,92 +136,31 @@ async fn main() -> anyhow::Result<()> {
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
-
-    let csrf_token = uuid::Uuid::new_v4().to_string();
     let base_ref = range.args.first().cloned().unwrap_or_else(|| range.mode.clone());
     let head_ref = range.args.get(1).cloned().unwrap_or_else(|| "HEAD".to_string());
 
-    let output_path = options.output.clone().unwrap_or_else(|| {
-        output::file_writer::get_default_output_path()
-    });
-
-    let repo_name_for_meta = repo_name.clone();
-    let base_ref_for_meta = base_ref.clone();
-    let head_ref_for_meta = head_ref.clone();
-
-    let metadata = types::ReviewMetadata {
-        repo_name: repo_name_for_meta,
-        commit_range: format!("{}..{}", base_ref_for_meta, head_ref_for_meta),
-        base_ref: base_ref_for_meta,
-        head_ref: head_ref_for_meta,
-        files: file_list.clone(),
-        timestamp: chrono::Utc::now().to_rfc3339(),
-        csrf_token: csrf_token.clone(),
-    };
-
-    let diff_data = types::DiffResponse { files: files.clone() };
-
-    if options.tui {
-        let _ = tui::run_tui(tui::TuiContext {
-            files: file_list,
-            parsed_diffs: files,
-            head_ref,
-            base_ref,
-            repo_name,
-            repo_path: cwd_str.clone(),
-            git,
-            range,
-            include_untracked,
-            context_lines: options.context,
-            config: app_config,
-        });
-        return Ok(());
-    }
-
-    let diff_source = git::DiffSource {
-        mode: range.mode.clone(),
-        args: range.args.clone(),
+    let _ = tui::run_tui(tui::TuiContext {
+        files: file_list,
+        parsed_diffs: files,
+        head_ref,
+        base_ref,
+        repo_name,
+        repo_path: cwd_str,
+        git,
+        range,
         include_untracked,
-    };
-
-    let server_state = server::ServerState {
-        metadata,
-        diff_data,
-        repo_root: cwd_str.clone(),
-        csrf_token,
-        output_path,
-        git: Arc::new(Mutex::new(git)),
-        frontend_dir: options.frontend_dir.clone().map(std::path::PathBuf::from),
+        context_lines: options.context,
         config: app_config,
-        diff_source,
-        default_context: options.context,
-    };
-
-    let (actual_port, shutdown) = server::start_server(server_state, options.port).await?;
-    let url = format!("http://127.0.0.1:{}", actual_port);
-
-    for _ in 0..50 {
-        if reqwest::get(format!("{}/api/v1/health", &url)).await.is_ok() {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    }
-
-    eprintln!("Review UI: {}", url);
-    if !options.no_open {
-        if let Err(e) = open::that(&url) {
-            eprintln!("Open {} in your browser ({})", url, e);
-        }
-    }
-
-    shutdown.wait_for_shutdown().await;
+    });
     Ok(())
 }
 
 pub mod cli;
 pub mod config;
 pub mod git;
+pub mod mcp;
 pub mod output;
+pub mod review;
 pub mod server;
 pub mod session;
 pub mod types;

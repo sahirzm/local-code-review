@@ -32,6 +32,9 @@ pub struct AppState {
     pub config: crate::config::Config,
     pub diff_source: DiffSource,
     pub default_context: u32,
+    /// Present in MCP mode: `post_finish` sends the generated markdown here
+    /// instead of printing it to stdout (stdout is reserved for JSON-RPC).
+    pub finish_tx: Option<super::FinishTx>,
 }
 
 /// git2's `DiffOptions::context_lines` takes a u32; this stands in for "Full"
@@ -152,7 +155,16 @@ async fn post_finish(
         out_path
     });
 
-    print!("{}", markdown);
+    // MCP mode: hand the markdown to the blocked `start_review` tool call via the
+    // channel and keep stdout clean for JSON-RPC. CLI/TUI mode: print to stdout.
+    match &state.finish_tx {
+        Some(tx) => {
+            if let Some(sender) = tx.lock().await.take() {
+                let _ = sender.send(markdown.clone());
+            }
+        }
+        None => print!("{}", markdown),
+    }
 
     Json(serde_json::json!({
         "success": true,
@@ -245,6 +257,7 @@ mod tests {
                 include_untracked: false,
             },
             default_context: 3,
+            finish_tx: None,
         };
         (state, tmp)
     }
@@ -375,6 +388,7 @@ mod tests {
                 include_untracked: false,
             },
             default_context: 3,
+            finish_tx: None,
         };
         state.diff_data = DiffResponse { files: vec![] };
 
@@ -459,6 +473,41 @@ mod tests {
         assert_eq!(json["outputPath"], out.to_string_lossy().as_ref());
         // The markdown must have actually been written to the output path.
         assert_eq!(std::fs::read_to_string(&out).unwrap(), markdown);
+    }
+
+    #[tokio::test]
+    async fn finish_sends_markdown_through_channel_in_mcp_mode() {
+        let (mut state, tmp) = test_state();
+        let out = tmp.path().join("review-out.md");
+        state.output_path = out.to_string_lossy().to_string();
+
+        let (tx, rx) = tokio::sync::oneshot::channel::<String>();
+        state.finish_tx = Some(std::sync::Arc::new(tokio::sync::Mutex::new(Some(tx))));
+
+        let payload = serde_json::json!({
+            "comments": [],
+            "reviewedFiles": [],
+            "metadata": {"commitRange": "main..feature", "timestamp": "2026-01-01T00:00:00Z"},
+            "_csrf": CSRF,
+        });
+        let res = create_api_router(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/finish")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status().as_u16(), 200);
+        let json = body_json(res).await;
+
+        // The markdown must arrive on the channel and match the response body.
+        let from_channel = rx.await.expect("finish_tx should receive markdown");
+        assert!(from_channel.contains("Code Review Comments"));
+        assert_eq!(from_channel, json["markdown"].as_str().unwrap());
     }
 
     #[tokio::test]
