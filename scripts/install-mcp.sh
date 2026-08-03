@@ -83,11 +83,11 @@ REGISTERED=0
 # --- 3. Claude Code -------------------------------------------------------------
 if command -v claude &>/dev/null; then
 	log "Registering with Claude Code..."
-	if [ "$SCOPE" = "project" ]; then
-		claude mcp add --scope project local-review -- "$BIN" mcp
-	else
-		claude mcp add --scope user local-review -- "$BIN" mcp
-	fi
+	# `claude mcp add` errors on a pre-existing name, which would abort the whole
+	# script under `set -e` before later agents are reached. Remove any existing
+	# entry first (ignoring "not found") so re-running stays idempotent.
+	claude mcp remove --scope "$SCOPE" local-review &>/dev/null || true
+	claude mcp add --scope "$SCOPE" local-review -- "$BIN" mcp
 	info "done (claude mcp add)"
 	REGISTERED=$((REGISTERED + 1))
 else
@@ -141,19 +141,18 @@ else
 	info "opencode not found — skipping."
 fi
 
-# --- 6. pi.dev (via pi-mcp-adapter) ---------------------------------------------
+# --- 6. pi.dev ------------------------------------------------------------------
 if command -v pi &>/dev/null; then
-	log "Configuring pi.dev (via pi-mcp-adapter)..."
+	log "Configuring pi.dev..."
+	# pi reads MCP servers from a dedicated mcp.json (an `mcpServers` map), not
+	# from settings.json.
 	if [ "$SCOPE" = "project" ]; then
-		PI_CFG=".pi/settings.json"
+		PI_CFG=".pi/mcp.json"
 	else
-		PI_CFG="$HOME/.pi/agent/settings.json"
+		PI_CFG="$HOME/.pi/agent/mcp.json"
 	fi
-	# pi has no native MCP; pi-mcp-adapter bridges a stdio MCP server. This writes
-	# an mcpServers entry the adapter consumes. See https://pi.dev/packages/pi-mcp-adapter
 	merge_json "$PI_CFG" "mcpServers" "local-review"
 	info "wrote $PI_CFG"
-	info "Ensure the pi-mcp-adapter package is installed: pi package add pi-mcp-adapter"
 	REGISTERED=$((REGISTERED + 1))
 else
 	info "pi.dev (pi) not found — skipping."

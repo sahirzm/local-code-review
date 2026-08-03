@@ -130,22 +130,6 @@ stdio, exposing a single **`start_review`** tool:
 
 The `.local-review/<timestamp>.md` file is still written for the record.
 
-`start_review` accepts the same options as the CLI (everything except `--tui`,
-which is incompatible with MCP's stdio transport):
-
-| Argument | Maps to CLI | Notes |
-|---|---|---|
-| `mode` | `--staged`/`--unstaged`/`--working`/`--all`, or `"commits"` | Omit for the default range |
-| `commit1`, `commit2` | positional commits | `commit1` required when `mode` is `"commits"` |
-| `base` | `--base` | |
-| `context` | `-U/--context` | Defaults to the config value |
-| `fetch` | `--fetch` | |
-| `include_untracked` | `--all` prompt | Only meaningful with `mode: "all"` |
-| `port` | `-p/--port` | 1–65535; auto-increments if busy. Default `8989` |
-| `no_open` | `--no-open` | Skip auto-opening the browser |
-| `output` | `-o/--output` | Extra path to write the markdown to |
-| `frontend_dir` | `--frontend-dir` | Dev override for the served frontend |
-
 ### Install
 
 ```bash
@@ -179,14 +163,17 @@ All four agents speak MCP over stdio; the server is `local-review mcp`.
 { "$schema": "https://opencode.ai/config.json", "mcp": { "local-review": { "type": "local", "command": ["local-review", "mcp"], "enabled": true } } }
 ```
 
-**pi.dev** — pi has no native MCP client; use the
-[`pi-mcp-adapter`](https://pi.dev/packages/pi-mcp-adapter) package to bridge the
-stdio server (`command: "local-review", args: ["mcp"]`).
+**pi.dev** — `~/.pi/agent/mcp.json` (or `.pi/mcp.json` for a project):
+
+```json
+{ "mcpServers": { "local-review": { "command": "local-review", "args": ["mcp"] } } }
+```
 
 ### `start_review` arguments
 
 All optional; an empty call reviews the default range (last pushed commit..HEAD),
-matching bare `local-review`.
+matching bare `local-review`. These mirror the CLI options (everything except
+`--tui`, which is incompatible with MCP's stdio transport).
 
 | Argument | Description |
 |----------|-------------|
@@ -196,6 +183,10 @@ matching bare `local-review`.
 | `context` | Unified diff context lines |
 | `fetch` | Run `git fetch` first |
 | `include_untracked` | Include untracked files (with `mode: "all"`) |
+| `port` | Server port (1–65535); auto-increments if busy. Default `8989` |
+| `no_open` | Don't auto-open the browser |
+| `output` | Extra path to also write the review markdown to |
+| `frontend_dir` | Serve frontend from this dir (dev override) |
 
 Because a human review can take a while, MCP-launched reviews disable the
 30-minute idle timeout — the server stops only when you finish. Some agents cap
