@@ -120,4 +120,21 @@ describe('CommentWidget', () => {
     fireEvent.click(screen.getByLabelText('Delete comment'));
     expect(screen.getByTestId('count').textContent).toBe('0');
   });
+
+  it('resolves and reopens through the store', () => {
+    const { container } = render(
+      <ReviewStoreProvider>
+        <StoreHarness text="resolve me" />
+      </ReviewStoreProvider>,
+    );
+    // Newly added comments default to open — no resolved modifier.
+    expect(container.querySelector('.comment-widget-resolved')).toBeNull();
+
+    fireEvent.click(screen.getByLabelText('Resolve comment'));
+    expect(container.querySelector('.comment-widget-resolved')).not.toBeNull();
+    expect(screen.getByText('resolved')).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText('Reopen comment'));
+    expect(container.querySelector('.comment-widget-resolved')).toBeNull();
+  });
 });

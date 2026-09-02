@@ -389,6 +389,7 @@ impl App {
                 start_line: pending.start_line,
                 end_line: pending.end_line,
                 side: pending.side,
+                status: crate::types::CommentStatus::Open,
                 created_at: now.clone(),
                 updated_at: now,
             });
@@ -705,6 +706,7 @@ mod tests {
             start_line: Some(2),
             end_line: Some(5),
             side: Some("new".into()),
+            status: crate::types::CommentStatus::Open,
             created_at: "t".into(),
             updated_at: "t".into(),
         });

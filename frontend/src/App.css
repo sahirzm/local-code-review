@@ -694,6 +694,34 @@ body {
   box-shadow: 0 0 0 2px var(--fill-link);
 }
 
+.comment-widget-resolved {
+  opacity: 0.65;
+}
+.comment-widget-resolved .comment-widget-text {
+  text-decoration: line-through;
+  text-decoration-color: var(--color-text-muted);
+}
+.comment-widget-orphaned {
+  border-color: var(--color-warning);
+  box-shadow: 0 0 0 1px var(--fill-warning);
+}
+
+.comment-status-badge {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.comment-status-resolved {
+  background: var(--fill-muted);
+  color: var(--color-text-muted);
+}
+.comment-status-orphaned {
+  background: var(--fill-warning);
+  color: var(--color-warning);
+}
+
 .comment-widget-header {
   display: flex;
   align-items: center;

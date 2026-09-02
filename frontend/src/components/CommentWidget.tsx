@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, Check, RotateCcw } from 'lucide-react';
 import type { Comment } from '../../../shared/types.js';
 import { CommentForm, renderTextWithCode } from './CommentForm.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
@@ -18,7 +18,7 @@ function formatTime(iso: string): string {
 
 export function CommentWidget({ comment, isActive, scrollDirection }: CommentWidgetProps): React.JSX.Element {
   const [editing, setEditing] = useState(false);
-  const { editComment, deleteComment } = useReviewStore();
+  const { editComment, deleteComment, setCommentStatus } = useReviewStore();
   const widgetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,10 +70,14 @@ export function CommentWidget({ comment, isActive, scrollDirection }: CommentWid
         ? 'File'
         : null;
 
+  const resolved = comment.status === 'resolved';
+  const orphaned = comment.status === 'orphaned';
+
   return (
     <motion.div
-      className={`comment-widget${isActive ? ' comment-widget-active' : ''}`}
+      className={`comment-widget${isActive ? ' comment-widget-active' : ''}${resolved ? ' comment-widget-resolved' : ''}${orphaned ? ' comment-widget-orphaned' : ''}`}
       ref={widgetRef}
+      data-comment-id={comment.id}
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
@@ -83,8 +87,18 @@ export function CommentWidget({ comment, isActive, scrollDirection }: CommentWid
           {comment.category}
         </span>
         {lineLabel && <span className="comment-line-label">{lineLabel}</span>}
+        {resolved && <span className="comment-status-badge comment-status-resolved">resolved</span>}
         <span className="comment-time">{formatTime(comment.createdAt)}</span>
         <div className="comment-widget-actions">
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={() => setCommentStatus(comment.id, resolved ? 'open' : 'resolved')}
+            aria-label={resolved ? 'Reopen comment' : 'Resolve comment'}
+            title={resolved ? 'Reopen comment' : 'Resolve comment'}
+          >
+            {resolved ? <RotateCcw size={14} aria-hidden="true" /> : <Check size={14} aria-hidden="true" />}
+          </button>
           <button type="button" className="btn-icon" onClick={() => setEditing(true)} aria-label="Edit comment">
             <Pencil size={14} aria-hidden="true" />
           </button>

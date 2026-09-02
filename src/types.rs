@@ -16,8 +16,20 @@ pub struct Comment {
     pub end_line: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub side: Option<String>,
+    /// Resolution state. Defaults to `open` for comments persisted before this
+    /// field existed (older session backups omit it).
+    #[serde(default)]
+    pub status: CommentStatus,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CommentStatus {
+    #[default]
+    Open,
+    Resolved,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

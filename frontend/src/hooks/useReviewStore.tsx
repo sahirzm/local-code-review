@@ -11,6 +11,7 @@ interface ReviewState {
 type Action =
   | { type: 'ADD'; comment: Comment }
   | { type: 'EDIT'; id: string; updates: { text?: string; category?: Comment['category'] } }
+  | { type: 'SET_STATUS'; id: string; status: NonNullable<Comment['status']> }
   | { type: 'DELETE'; id: string }
   | { type: 'SET_VIEW_MODE'; viewMode: 'split' | 'unified' }
   | { type: 'MARK_REVIEWED'; filePath: string }
@@ -24,6 +25,7 @@ export interface ReviewStore {
   reviewedFiles: string[];
   addComment: (comment: Omit<Comment, 'id' | 'createdAt' | 'updatedAt'>) => void;
   editComment: (id: string, updates: { text?: string; category?: Comment['category'] }) => void;
+  setCommentStatus: (id: string, status: NonNullable<Comment['status']>) => void;
   deleteComment: (id: string) => void;
   getCommentsForFile: (filePath: string) => Comment[];
   getCommentsForLine: (filePath: string, line: number, side: 'old' | 'new') => Comment[];
@@ -52,6 +54,15 @@ function reducer(state: ReviewState, action: Action): ReviewState {
       };
     case 'DELETE':
       return { ...state, comments: state.comments.filter((c) => c.id !== action.id) };
+    case 'SET_STATUS':
+      return {
+        ...state,
+        comments: state.comments.map((c) =>
+          c.id === action.id
+            ? { ...c, status: action.status, updatedAt: new Date().toISOString() }
+            : c,
+        ),
+      };
     case 'SET_VIEW_MODE':
       return { ...state, viewMode: action.viewMode };
     case 'MARK_REVIEWED':
@@ -161,7 +172,7 @@ export function ReviewStoreProvider({ children, metadata }: ProviderProps): Reac
       const now = new Date().toISOString();
       dispatch({
         type: 'ADD',
-        comment: { ...comment, id: crypto.randomUUID(), createdAt: now, updatedAt: now },
+        comment: { status: 'open', ...comment, id: crypto.randomUUID(), createdAt: now, updatedAt: now },
       });
     },
     [],
@@ -177,6 +188,13 @@ export function ReviewStoreProvider({ children, metadata }: ProviderProps): Reac
   const deleteComment = useCallback((id: string) => {
     dispatch({ type: 'DELETE', id });
   }, []);
+
+  const setCommentStatus = useCallback(
+    (id: string, status: NonNullable<Comment['status']>) => {
+      dispatch({ type: 'SET_STATUS', id, status });
+    },
+    [],
+  );
 
   const setViewMode = useCallback((mode: 'split' | 'unified') => {
     dispatch({ type: 'SET_VIEW_MODE', viewMode: mode });
@@ -229,6 +247,7 @@ export function ReviewStoreProvider({ children, metadata }: ProviderProps): Reac
       reviewedFiles: state.reviewedFiles,
       addComment,
       editComment,
+      setCommentStatus,
       deleteComment,
       getCommentsForFile,
       getCommentsForLine,
@@ -239,7 +258,7 @@ export function ReviewStoreProvider({ children, metadata }: ProviderProps): Reac
       unmarkFileReviewed,
       isFileReviewed,
     }),
-    [state.comments, state.viewMode, state.reviewedFiles, addComment, editComment, deleteComment, getCommentsForFile, getCommentsForLine, getAllComments, setViewMode, discardReview, markFileReviewed, unmarkFileReviewed, isFileReviewed],
+    [state.comments, state.viewMode, state.reviewedFiles, addComment, editComment, setCommentStatus, deleteComment, getCommentsForFile, getCommentsForLine, getAllComments, setViewMode, discardReview, markFileReviewed, unmarkFileReviewed, isFileReviewed],
   );
 
   return <ReviewContext.Provider value={value}>{children}</ReviewContext.Provider>;

@@ -75,12 +75,17 @@ fn extract_code_context(
 }
 
 fn format_comment(c: &Comment) -> String {
-    format!("- [{}] {}", match c.category {
+    let resolved = if c.status == crate::types::CommentStatus::Resolved {
+        " (resolved)"
+    } else {
+        ""
+    };
+    format!("- [{}]{} {}", match c.category {
         crate::types::CommentCategory::Fix => "fix",
         crate::types::CommentCategory::Question => "question",
         crate::types::CommentCategory::Suggestion => "suggestion",
         crate::types::CommentCategory::Nit => "nit",
-    }, c.text)
+    }, resolved, c.text)
 }
 
 pub struct MarkdownInput {
@@ -539,6 +544,34 @@ mod tests {
         assert!(result.contains("- [fix] No side overall"));
         assert!(result.contains("- [nit] No side file"));
     }
+
+    #[test]
+    fn marks_resolved_comments_in_export() {
+        let input = MarkdownInput {
+            comments: vec![
+                make_comment(Comment {
+                    comment_type: CommentType::Overall,
+                    category: CommentCategory::Fix,
+                    text: "Addressed already".into(),
+                    status: CommentStatus::Resolved,
+                    ..Default::default()
+                }),
+                make_comment(Comment {
+                    comment_type: CommentType::Overall,
+                    category: CommentCategory::Nit,
+                    text: "Still open".into(),
+                    status: CommentStatus::Open,
+                    ..Default::default()
+                }),
+            ],
+            diff_data: empty_diff(),
+            metadata: base_meta(),
+        };
+        let result = generate_markdown(&input);
+        assert!(result.contains("- [fix] (resolved) Addressed already"));
+        assert!(result.contains("- [nit] Still open"));
+        assert!(!result.contains("(resolved) Still open"));
+    }
 }
 
 impl Default for Comment {
@@ -552,6 +585,7 @@ impl Default for Comment {
             start_line: None,
             end_line: None,
             side: None,
+            status: crate::types::CommentStatus::Open,
             created_at: String::new(),
             updated_at: String::new(),
         }

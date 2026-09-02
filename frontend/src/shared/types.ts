@@ -1,3 +1,10 @@
+export type CommentStatus = 'open' | 'resolved' | 'orphaned';
+
+export type OrphanReason =
+  | 'snippet_mismatch'
+  | 'file_missing'
+  | 'line_out_of_range';
+
 export interface Comment {
   id: string;
   type: 'line' | 'range' | 'file' | 'overall';
@@ -7,6 +14,14 @@ export interface Comment {
   startLine?: number;
   endLine?: number;
   side?: 'old' | 'new';
+  /** Resolution state. Absent on legacy sessions; treated as 'open'. */
+  status?: CommentStatus;
+  /** Verbatim content of the pinned start line, used for orphan detection. */
+  pinSnippet?: string;
+  /** Number of lines the comment was pinned across (endLine-startLine+1). */
+  pinLineCount?: number;
+  /** Why a comment became orphaned; only set when status === 'orphaned'. */
+  orphanReason?: OrphanReason;
   createdAt: string;
   updatedAt: string;
 }
