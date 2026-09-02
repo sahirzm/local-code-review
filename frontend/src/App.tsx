@@ -720,7 +720,7 @@ export function App(): React.JSX.Element {
   }, [theme, fontSize, lineHeight, codeFont, uiFont]);
 
   const fetchDiff = useCallback((level: ContextLevel): Promise<DiffResponse> => {
-    return fetch(`/api/v1/diff?context=${level}`).then((r) => {
+    return fetch(`/api/v1/diff?context=${level}`, { cache: 'no-store' }).then((r) => {
       if (!r.ok) throw new Error(`diff: ${r.status}`);
       return r.json() as Promise<DiffResponse>;
     });
@@ -730,7 +730,7 @@ export function App(): React.JSX.Element {
     setLoadState('loading');
     setError('');
     Promise.all([
-      fetch('/api/v1/metadata').then((r) => {
+      fetch('/api/v1/metadata', { cache: 'no-store' }).then((r) => {
         if (!r.ok) throw new Error(`metadata: ${r.status}`);
         return r.json() as Promise<ReviewMetadata>;
       }),

@@ -211,6 +211,7 @@ export function FileDiff({
           }}
           lineAnnotations={annotations}
           renderAnnotation={renderAnnotation}
+          disableWorkerPool
         />
       ) : fileDiff ? (
         <div className="diff-loading">Loading…</div>
