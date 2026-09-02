@@ -6,11 +6,11 @@ import {
 import { Toaster, toast } from 'sonner';
 import { Modal } from './components/ui/Modal.js';
 import { TooltipProvider, Tooltip } from './components/ui/Tooltip.js';
-import type { ReviewMetadata, DiffResponse, ParsedFileDiff, UserPreferences, FinishResponse, FileChange, Comment, ThemeId, CodeFontId, UiFontId } from '../../shared/types.js';
-import { THEMES, DEFAULT_THEME, normalizeThemeId } from './themes.js';
+import type { ReviewMetadata, DiffResponse, ParsedFileDiff, FinishResponse, FileChange, Comment, ThemeId, CodeFontId, UiFontId } from '../../shared/types.js';
+import { THEMES } from './themes.js';
 import {
-  CODE_FONTS, UI_FONTS, DEFAULT_CODE_FONT, DEFAULT_UI_FONT,
-  normalizeCodeFontId, normalizeUiFontId, resolveCodeFontStack, resolveUiFontStack,
+  CODE_FONTS, UI_FONTS,
+  resolveCodeFontStack, resolveUiFontStack,
 } from './fonts.js';
 import { ReviewStoreProvider, useReviewStore } from './hooks/useReviewStore.js';
 import { DiffView } from './components/DiffView.js';
@@ -48,48 +48,6 @@ function loadContextLevel(): ContextLevel {
   return DEFAULT_CONTEXT;
 }
 
-const PREFS_KEY = 'local-review:preferences';
-
-const MIN_FONT_SIZE = 10;
-const MAX_FONT_SIZE = 20;
-const DEFAULT_FONT_SIZE = 13;
-
-const MIN_LINE_HEIGHT = 1.2;
-const MAX_LINE_HEIGHT = 2.4;
-// 20/13 reproduces pierre's default row ratio, so existing reviews look identical.
-const DEFAULT_LINE_HEIGHT = Math.round((20 / 13) * 10) / 10;
-
-function clampFontSize(size: number): number {
-  if (!Number.isFinite(size)) return DEFAULT_FONT_SIZE;
-  return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(size)));
-}
-
-function clampLineHeight(ratio: number): number {
-  if (!Number.isFinite(ratio)) return DEFAULT_LINE_HEIGHT;
-  const clamped = Math.min(MAX_LINE_HEIGHT, Math.max(MIN_LINE_HEIGHT, ratio));
-  return Math.round(clamped * 10) / 10;
-}
-
-function loadPreferences(): UserPreferences {
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<UserPreferences>;
-      return {
-        theme: normalizeThemeId(parsed.theme),
-        fontSize: clampFontSize(parsed.fontSize ?? DEFAULT_FONT_SIZE),
-        lineHeight: clampLineHeight(parsed.lineHeight ?? DEFAULT_LINE_HEIGHT),
-        codeFont: normalizeCodeFontId(parsed.codeFont),
-        uiFont: normalizeUiFontId(parsed.uiFont),
-      };
-    }
-  } catch { /* ignore */ }
-  return { theme: DEFAULT_THEME, fontSize: DEFAULT_FONT_SIZE, lineHeight: DEFAULT_LINE_HEIGHT, codeFont: DEFAULT_CODE_FONT, uiFont: DEFAULT_UI_FONT };
-}
-
-function savePreferences(prefs: UserPreferences): void {
-  localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-}
 
 // The backend returns files in git's diff order, which doesn't match the
 // alphabetical sidebar tree. Sort by display path so the diff view, file
