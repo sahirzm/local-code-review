@@ -3,6 +3,7 @@ import { PanelLeftClose, PanelLeftOpen, ChevronRight, ChevronDown, MessageSquare
 import type { FileChange, FileTreeNode } from '../../../shared/types.js';
 import { buildFileTree } from '../utils/build-file-tree.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
+import { useSidebarWidth } from '../hooks/useSidebarWidth.js';
 import { FileIcon } from '../utils/file-icon.js';
 
 type StatusFilter = 'all' | FileChange['status'];
@@ -19,6 +20,7 @@ export function Sidebar({ files, onFileClick, activeFile }: SidebarProps): React
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [quickFilters, setQuickFilters] = useState<Set<QuickFilter>>(new Set());
+  const { width, resizing, startResize } = useSidebarWidth();
 
   const { comments, reviewedFiles } = useReviewStore();
 
@@ -219,6 +221,7 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
         type="button"
         style={{ paddingLeft: `${depth * 14 + 10}px` }}
         aria-current={isActive ? 'true' : undefined}
+        title={node.path}
       >
         <span
           className="tree-status-dot"
