@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Trash2, Check, Circle, MessageSquarePlus, MessageSquare, RefreshCw, Columns2, AlignJustify,
+  Trash2, Check, Circle, MessageSquarePlus, MessageSquare, MessagesSquare, RefreshCw, Columns2, AlignJustify,
   ChevronLeft, ChevronRight, HelpCircle, X, AlertTriangle, Settings, FileText,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
@@ -19,6 +19,7 @@ import { DiffWorkerPoolProvider, useWorkerPoolThemeSync } from './components/dif
 import { resolveShikiTheme } from './components/diff/shikiTheme.js';
 import { Sidebar } from './components/Sidebar.js';
 import { OverallComments } from './components/OverallComments.js';
+import { CommentManager } from './components/CommentManager.js';
 import { SummaryPage } from './components/SummaryPage.js';
 import { generateClientMarkdown, downloadMarkdown } from './utils/client-markdown.js';
 import { cleanExpiredSessions } from './hooks/useSession.js';
@@ -419,6 +420,7 @@ function AppContent({
   const quota = useQuotaMonitor();
   const [showHelp, setShowHelp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showComments, setShowComments] = useState(false);
   const [showRefreshWarn, setShowRefreshWarn] = useState(false);
   const [commentIdx, setCommentIdx] = useState(-1);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
@@ -511,6 +513,19 @@ function AppContent({
     }
   }, [sortedComments, commentIdx, filePaths, scrollTop]);
 
+  const jumpToComment = useCallback((c: Comment) => {
+    setActiveCommentId(c.id);
+    setScrollDirection('forward');
+    const idx = sortedComments.findIndex((x) => x.id === c.id);
+    if (idx >= 0) setCommentIdx(idx);
+    if (c.type === 'overall') {
+      scrollTop();
+    } else if (c.filePath) {
+      const fileIdx = filePaths.indexOf(c.filePath);
+      if (fileIdx >= 0) setCurrentIndex(fileIdx);
+    }
+  }, [sortedComments, filePaths, scrollTop]);
+
   const handleAddOverallComment = useCallback(() => {
     // Scroll to top where overall comments section is
     scrollTop();
@@ -597,6 +612,9 @@ function AppContent({
               <button className="btn toolbar-btn" onClick={handleAddOverallComment} type="button" title="Add overall comment (c)">
                 <MessageSquarePlus size={14} aria-hidden="true" /> Comment
               </button>
+              <button className="btn toolbar-btn" onClick={() => setShowComments(true)} type="button" title="Comment manager" aria-label="Open comment manager">
+                <MessagesSquare size={14} aria-hidden="true" /> Comments{comments.length > 0 ? ` (${comments.length})` : ''}
+              </button>
               <button className="btn toolbar-btn" onClick={handleRefresh} type="button" title="Refresh diff">
                 <RefreshCw size={14} aria-hidden="true" /> Refresh
               </button>
@@ -622,6 +640,12 @@ function AppContent({
         </div>
       </div>
       <StatusBar totalFiles={fileChanges.length} />
+      <CommentManager
+        open={showComments}
+        onOpenChange={setShowComments}
+        diffFiles={diffFiles}
+        onJumpToComment={jumpToComment}
+      />
       <SettingsModal
         open={showSettings}
         onOpenChange={setShowSettings}

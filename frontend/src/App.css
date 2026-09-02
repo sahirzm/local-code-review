@@ -1583,6 +1583,101 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
+.comment-manager-dialog {
+  background: var(--color-panel);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  max-width: 640px;
+  width: 92%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+}
+.comment-manager-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.comment-manager-tab {
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  padding: 3px 12px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+.comment-manager-tab.active {
+  background: var(--fill-link);
+  border-color: var(--color-link);
+  color: var(--color-text);
+}
+.comment-manager-body {
+  overflow-y: auto;
+  flex: 1;
+}
+.comment-manager-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 12px 0;
+}
+.comment-manager-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.comment-manager-item {
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+.comment-manager-item.status-resolved { opacity: 0.7; }
+.comment-manager-item.status-orphaned { border-color: var(--color-warning); }
+.comment-manager-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.comment-manager-loc {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+.comment-manager-text {
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.comment-manager-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--color-link);
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.link-btn:hover { text-decoration: underline; }
+.link-btn.link-danger { color: var(--color-danger); }
+
 .settings-header {
   display: flex;
   align-items: center;
