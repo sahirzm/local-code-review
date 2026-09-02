@@ -75,69 +75,83 @@ export function Sidebar({ files, onFileClick, activeFile }: SidebarProps): React
   const statuses: StatusFilter[] = ['all', 'added', 'modified', 'deleted', 'renamed'];
 
   return (
-    <aside className="sidebar" aria-label="File navigator">
-      <div className="sidebar-header">
-        <span className="sidebar-title">
-          Files {reviewedCount}/{files.length}
-        </span>
-        <button
-          className="sidebar-toggle"
-          onClick={() => setCollapsed(true)}
-          type="button"
-          aria-label="Collapse sidebar"
-          title="Collapse sidebar"
-        >
-          <PanelLeftClose size={16} aria-hidden="true" />
-        </button>
-      </div>
+    <>
+      <aside
+        className="sidebar"
+        aria-label="File navigator"
+        style={{ ['--sidebar-width' as string]: `${width}px` }}
+      >
+        <div className="sidebar-header">
+          <span className="sidebar-title">
+            Files {reviewedCount}/{files.length}
+          </span>
+          <button
+            className="sidebar-toggle"
+            onClick={() => setCollapsed(true)}
+            type="button"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            <PanelLeftClose size={16} aria-hidden="true" />
+          </button>
+        </div>
 
-      <div className="sidebar-filters">
-        <input
-          className="sidebar-search"
-          type="search"
-          placeholder="Filter files…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Filter files by path"
-        />
-        <div className="sidebar-status-filters">
-          {statuses.map((s) => (
+        <div className="sidebar-filters">
+          <input
+            className="sidebar-search"
+            type="search"
+            placeholder="Filter files…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Filter files by path"
+          />
+          <div className="sidebar-status-filters">
+            {statuses.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`filter-pill ${statusFilter === s ? 'filter-pill-active' : ''}`}
+                onClick={() => setStatusFilter(s)}
+              >
+                {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="sidebar-quick-filters">
             <button
-              key={s}
               type="button"
-              className={`filter-pill ${statusFilter === s ? 'filter-pill-active' : ''}`}
-              onClick={() => setStatusFilter(s)}
+              className={`filter-pill ${quickFilters.has('has-comments') ? 'filter-pill-active' : ''}`}
+              onClick={() => toggleQuickFilter('has-comments')}
             >
-              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+              <MessageSquare size={12} aria-hidden="true" /> Has comments
             </button>
-          ))}
+            <button
+              type="button"
+              className={`filter-pill ${quickFilters.has('needs-review') ? 'filter-pill-active' : ''}`}
+              onClick={() => toggleQuickFilter('needs-review')}
+            >
+              <Circle size={12} aria-hidden="true" /> Needs review
+            </button>
+          </div>
         </div>
-        <div className="sidebar-quick-filters">
-          <button
-            type="button"
-            className={`filter-pill ${quickFilters.has('has-comments') ? 'filter-pill-active' : ''}`}
-            onClick={() => toggleQuickFilter('has-comments')}
-          >
-            <MessageSquare size={12} aria-hidden="true" /> Has comments
-          </button>
-          <button
-            type="button"
-            className={`filter-pill ${quickFilters.has('needs-review') ? 'filter-pill-active' : ''}`}
-            onClick={() => toggleQuickFilter('needs-review')}
-          >
-            <Circle size={12} aria-hidden="true" /> Needs review
-          </button>
-        </div>
-      </div>
 
-      <nav className="sidebar-tree" aria-label="File tree">
-        {tree.length === 0 ? (
-          <p className="sidebar-empty">No files match</p>
-        ) : (
-          <FileTree nodes={tree} onFileClick={onFileClick} activeFile={activeFile} depth={0} />
-        )}
-      </nav>
-    </aside>
+        <nav className="sidebar-tree" aria-label="File tree">
+          {tree.length === 0 ? (
+            <p className="sidebar-empty">No files match</p>
+          ) : (
+            <FileTree nodes={tree} onFileClick={onFileClick} activeFile={activeFile} depth={0} />
+          )}
+        </nav>
+      </aside>
+      <div
+        className={`sidebar-resizer${resizing ? ' resizing' : ''}`}
+        onMouseDown={startResize}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        data-testid="sidebar-resizer"
+      />
+    </>
   );
 }
 
@@ -176,6 +190,7 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
           onClick={() => setExpanded((e) => !e)}
           type="button"
           style={{ paddingLeft: `${depth * 14 + 10}px` }}
+          title={node.path}
         >
           <span className="tree-icon" aria-hidden="true">{expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
           <span className="tree-dir-name">{node.name}/</span>
