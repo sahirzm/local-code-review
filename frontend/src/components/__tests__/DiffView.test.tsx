@@ -92,8 +92,7 @@ describe('DiffView', () => {
     expect(screen.queryByText('a.ts')).toBeNull();
   });
 
-  it('remounts the file surface when the font size changes', () => {
-    const props = {
+  it('remounts the file surface when the font size changes', () => {    const props = {
       files: [file('a.ts')],
       currentIndex: 0,
       viewType: 'unified' as const,
@@ -113,6 +112,33 @@ describe('DiffView', () => {
     rerender(<DiffView {...props} fontSize={18} />);
     const after = container.querySelector('.file-diff');
     expect(after).not.toBeNull();
+    expect(after).not.toBe(before);
+  });
+
+  it('remounts the file surface when the diff content changes on refresh', () => {
+    const base = {
+      currentIndex: 0,
+      viewType: 'unified' as const,
+      themeType: 'dark' as const,
+      syntaxTheme: SYNTAX_THEME,
+      fontSize: 13,
+      lineHeight: 1.5,
+    };
+    const original = file('a.ts');
+    const { container, rerender } = render(
+      <DiffView {...base} files={[original]} />,
+      { wrapper },
+    );
+    const before = container.querySelector('.file-diff');
+
+    // Simulate a refresh returning a different diff for the same path.
+    const refreshed: ParsedFileDiff = {
+      ...original,
+      rawPatch: original.rawPatch.replace('+b', '+b\n+c'),
+      additions: 2,
+    };
+    rerender(<DiffView {...base} files={[refreshed]} />);
+    const after = container.querySelector('.file-diff');
     expect(after).not.toBe(before);
   });
 });
