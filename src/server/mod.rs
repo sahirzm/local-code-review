@@ -58,16 +58,18 @@ pub async fn start_server_with_shutdown(
     let shutdown_clone = shutdown.clone();
 
     let app_state = routes::AppState {
-        metadata: state.metadata,
-        diff_data: state.diff_data,
+        diff: Arc::new(Mutex::new(routes::DiffRuntime {
+            metadata: state.metadata,
+            diff_data: state.diff_data,
+            diff_source: state.diff_source,
+            default_context: state.default_context,
+        })),
         repo_root: state.repo_root.clone(),
         csrf_token: state.csrf_token.clone(),
         output_path: state.output_path,
         git: state.git,
         shutdown: shutdown_clone,
         config: state.config,
-        diff_source: state.diff_source,
-        default_context: state.default_context,
         finish_tx: state.finish_tx,
     };
 

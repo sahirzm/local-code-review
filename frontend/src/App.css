@@ -1678,6 +1678,12 @@ body {
 .link-btn:hover { text-decoration: underline; }
 .link-btn.link-danger { color: var(--color-danger); }
 
+.diff-mode-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .settings-header {
   display: flex;
   align-items: center;

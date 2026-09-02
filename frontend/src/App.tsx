@@ -20,6 +20,7 @@ import { resolveShikiTheme } from './components/diff/shikiTheme.js';
 import { Sidebar } from './components/Sidebar.js';
 import { OverallComments } from './components/OverallComments.js';
 import { CommentManager } from './components/CommentManager.js';
+import { DiffModeSelector } from './components/DiffModeSelector.js';
 import { SummaryPage } from './components/SummaryPage.js';
 import { generateClientMarkdown, downloadMarkdown } from './utils/client-markdown.js';
 import { cleanExpiredSessions } from './hooks/useSession.js';
@@ -398,6 +399,7 @@ function AppContent({
   fileChanges,
   onFinish,
   onRefresh,
+  onDiffModeSwitched,
   onSelectTheme,
   theme,
   themeMode,
@@ -418,6 +420,7 @@ function AppContent({
   fileChanges: FileChange[];
   onFinish: (data: SummaryData) => void;
   onRefresh: () => void;
+  onDiffModeSwitched: (result: { metadata: ReviewMetadata; diff: DiffResponse }) => void;
   onSelectTheme: (id: ThemeId) => void;
   theme: ThemeId;
   themeMode: 'dark' | 'light';
@@ -650,6 +653,14 @@ function AppContent({
               </button>
             </div>
             <div className="toolbar-separator" />
+            <div className="toolbar-group" role="group" aria-label="Diff base">
+              <DiffModeSelector
+                csrfToken={metadata.csrfToken}
+                onSwitched={onDiffModeSwitched}
+                onError={(message) => toast.error('Failed to switch diff', { description: message })}
+              />
+            </div>
+            <div className="toolbar-separator" />
             <div className="toolbar-group">
               <Tooltip label="Settings">
                 <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => setShowSettings(true)} type="button" aria-label="Settings">
@@ -795,6 +806,13 @@ export function App(): React.JSX.Element {
       });
   }, [fetchDiff, contextLevel]);
 
+  const handleDiffModeSwitched = useCallback((result: { metadata: ReviewMetadata; diff: DiffResponse }) => {
+    // The server keeps the CSRF token stable across a mode switch; preserve it
+    // since the recomputed metadata carries the same token.
+    setMetadata(result.metadata);
+    setDiffFiles(sortDiffFiles(result.diff.files ?? []));
+  }, []);
+
   const handleSelectContext = useCallback((level: ContextLevel) => {
     setContextLevel(level);
     try {
@@ -881,6 +899,7 @@ export function App(): React.JSX.Element {
             fileChanges={metadata.files}
             onFinish={handleFinish}
             onRefresh={handleRefresh}
+            onDiffModeSwitched={handleDiffModeSwitched}
             onSelectTheme={handleSelectTheme}
             theme={theme}
             themeMode={themeMode}

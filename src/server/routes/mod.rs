@@ -20,21 +20,29 @@ use super::Shutdown;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub metadata: ReviewMetadata,
-    /// Diff at the startup default context; served when no `context` override
-    /// is requested and reused as the fallback if regeneration fails.
-    pub diff_data: DiffResponse,
+    /// Mutable diff state (metadata, parsed diff, and the diff source) so the
+    /// UI can switch diff mode/base at runtime without a restart. Guarded by a
+    /// mutex because `AppState` is `Clone` and shared across requests.
+    pub diff: Arc<Mutex<DiffRuntime>>,
     pub repo_root: String,
     pub csrf_token: String,
     pub output_path: String,
     pub git: Arc<Mutex<GitModule>>,
     pub shutdown: Arc<Shutdown>,
     pub config: crate::config::Config,
-    pub diff_source: DiffSource,
-    pub default_context: u32,
     /// Present in MCP mode: `post_finish` sends the generated markdown here
     /// instead of printing it to stdout (stdout is reserved for JSON-RPC).
     pub finish_tx: Option<super::FinishTx>,
+}
+
+/// The diff-related state that can change at runtime via the diff-mode switch.
+pub struct DiffRuntime {
+    pub metadata: ReviewMetadata,
+    /// Diff at the startup default context; served when no `context` override
+    /// is requested and reused as the fallback if regeneration fails.
+    pub diff_data: DiffResponse,
+    pub diff_source: DiffSource,
+    pub default_context: u32,
 }
 
 /// git2's `DiffOptions::context_lines` takes a u32; this stands in for "Full"
@@ -54,12 +62,34 @@ struct SaveSessionBody {
     _csrf: String,
 }
 
+/// Body of the runtime diff-mode switch. Mirrors the CLI's diff selection so
+/// the UI can re-target the review without a restart. CSRF is enforced by the
+/// shared middleware (x-csrf-token header + origin check), matching the other
+/// mutating routes, so no token field is needed here.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DiffModeBody {
+    /// One of: staged | unstaged | working | all | commits | last_pushed.
+    mode: String,
+    /// Base ref for `all`; ignored otherwise.
+    #[serde(default)]
+    base: Option<String>,
+    /// Explicit commit range for `commits` mode.
+    #[serde(default)]
+    commit1: Option<String>,
+    #[serde(default)]
+    commit2: Option<String>,
+    #[serde(default)]
+    include_untracked: bool,
+}
+
 pub fn create_api_router(state: AppState) -> Router {
     Router::new()
         .route("/api/v1/health", get(health))
         .route("/api/v1/config", get(get_config))
         .route("/api/v1/metadata", get(get_metadata))
         .route("/api/v1/diff", get(get_diff))
+        .route("/api/v1/diff-mode", post(post_diff_mode))
         .route("/api/v1/finish", post(post_finish))
         .route("/api/v1/save-session", post(post_save_session))
         .route("/api/v1/shutdown", post(post_shutdown))
@@ -78,33 +108,108 @@ async fn get_config(State(state): State<AppState>) -> Json<crate::config::Config
 }
 
 async fn get_metadata(State(state): State<AppState>) -> Json<ReviewMetadata> {
-    Json(state.metadata)
+    Json(state.diff.lock().await.metadata.clone())
 }
 
 async fn get_diff(
     State(state): State<AppState>,
     Query(query): Query<DiffQuery>,
 ) -> Json<DiffResponse> {
+    let diff = state.diff.lock().await;
     let context = match query.context.as_deref() {
-        None => return Json(state.diff_data),
+        None => return Json(diff.diff_data.clone()),
         Some("full") => FULL_CONTEXT_LINES,
         Some(n) => match n.parse::<u32>() {
             Ok(parsed) => parsed,
-            Err(_) => return Json(state.diff_data),
+            Err(_) => return Json(diff.diff_data.clone()),
         },
     };
 
-    if context == state.default_context {
-        return Json(state.diff_data);
+    if context == diff.default_context {
+        return Json(diff.diff_data.clone());
     }
 
     let git = state.git.lock().await;
-    match git.diff_for_source(&state.diff_source, context) {
+    match git.diff_for_source(&diff.diff_source, context) {
         Ok(raw) => Json(DiffResponse {
             files: diff_parser::parse_diff(&raw),
         }),
-        Err(_) => Json(state.diff_data),
+        Err(_) => Json(diff.diff_data.clone()),
     }
+}
+
+/// Switch the diff mode/base at runtime. Recomputes the diff and file list,
+/// updates the shared metadata, and returns the fresh metadata + diff so the
+/// UI can re-render without a restart.
+async fn post_diff_mode(
+    State(state): State<AppState>,
+    Json(body): Json<DiffModeBody>,
+) -> impl IntoResponse {
+    let git = state.git.lock().await;
+
+    // Resolve the requested mode into the (mode, args) pair compute_diff wants.
+    let resolved: anyhow::Result<(String, Vec<String>)> = (|| match body.mode.as_str() {
+        "staged" | "unstaged" | "working" => Ok((body.mode.clone(), vec![])),
+        "last_pushed" => {
+            let base = git.get_last_pushed_commit()?;
+            Ok(("commits".to_string(), vec![base, "HEAD".to_string()]))
+        }
+        "all" => {
+            let base = match body.base.as_deref() {
+                Some(b) => git.resolve_ref(b)?,
+                None => git.get_last_pushed_commit()?,
+            };
+            Ok(("all".to_string(), vec![base]))
+        }
+        "commits" => {
+            let a = body.commit1.as_deref().ok_or_else(|| anyhow::anyhow!("commit1 required"))?;
+            let b = body.commit2.as_deref().unwrap_or("HEAD");
+            Ok(("commits".to_string(), vec![git.resolve_ref(a)?, git.resolve_ref(b)?]))
+        }
+        other => anyhow::bail!("Unknown diff mode: {}", other),
+    })();
+
+    let (mode, args) = match resolved {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": e.to_string(), "code": "BAD_MODE"})),
+            );
+        }
+    };
+
+    let mut diff = state.diff.lock().await;
+    let computed = match crate::review::compute_diff(
+        &git,
+        &mode,
+        &args,
+        body.include_untracked,
+        diff.default_context,
+    ) {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": e.to_string(), "code": "DIFF_FAILED"})),
+            );
+        }
+    };
+
+    diff.metadata.commit_range = format!("{}..{}", computed.base_ref, computed.head_ref);
+    diff.metadata.base_ref = computed.base_ref;
+    diff.metadata.head_ref = computed.head_ref;
+    diff.metadata.files = computed.file_list;
+    diff.diff_data = DiffResponse { files: computed.files };
+    diff.diff_source = DiffSource { mode, args, include_untracked: body.include_untracked };
+
+    (
+        axum::http::StatusCode::OK,
+        Json(serde_json::json!({
+            "metadata": diff.metadata,
+            "diff": diff.diff_data,
+        })),
+    )
 }
 
 async fn get_file(
@@ -112,7 +217,7 @@ async fn get_file(
     AxumPath(path): AxumPath<String>,
 ) -> impl IntoResponse {
     let git = state.git.lock().await;
-    let head_ref = state.metadata.head_ref.clone();
+    let head_ref = state.diff.lock().await.metadata.head_ref.clone();
 
     if let Ok(content) = git.get_file_content(&head_ref, &path) {
         return (
@@ -138,10 +243,14 @@ async fn post_finish(
     State(state): State<AppState>,
     Json(body): Json<FinishRequest>,
 ) -> impl IntoResponse {
+    let (diff_data, metadata) = {
+        let diff = state.diff.lock().await;
+        (diff.diff_data.clone(), diff.metadata.clone())
+    };
     let markdown_input = MarkdownInput {
         comments: body.comments,
-        diff_data: state.diff_data,
-        metadata: state.metadata,
+        diff_data,
+        metadata,
     };
     let markdown = generate_markdown(&markdown_input);
 
@@ -177,8 +286,9 @@ async fn post_save_session(
     State(state): State<AppState>,
     Json(body): Json<SaveSessionBody>,
 ) -> Json<serde_json::Value> {
-    let hash = session::hash_repo_path(&state.metadata.commit_range);
-    let key = session::get_session_key(&hash, &state.metadata.commit_range);
+    let commit_range = state.diff.lock().await.metadata.commit_range.clone();
+    let hash = session::hash_repo_path(&commit_range);
+    let key = session::get_session_key(&hash, &commit_range);
     match session::save_session(&key, &body.session) {
         Ok(()) => Json(serde_json::json!({"success": true})),
         Err(_) => Json(serde_json::json!({"error": "Failed to save session", "code": "SAVE_ERROR"})),
@@ -243,20 +353,22 @@ mod tests {
         let repo_root = tmp.path().to_string_lossy().to_string();
         let git = GitModule::new(&repo_root).unwrap();
         let state = AppState {
-            metadata: metadata(),
-            diff_data: diff(),
+            diff: Arc::new(Mutex::new(DiffRuntime {
+                metadata: metadata(),
+                diff_data: diff(),
+                diff_source: DiffSource {
+                    mode: "working".into(),
+                    args: vec![],
+                    include_untracked: false,
+                },
+                default_context: 3,
+            })),
             repo_root,
             csrf_token: CSRF.into(),
             output_path: String::new(),
             git: Arc::new(Mutex::new(git)),
             shutdown: Arc::new(Shutdown::new()),
             config: crate::config::Config::default(),
-            diff_source: DiffSource {
-                mode: "working".into(),
-                args: vec![],
-                include_untracked: false,
-            },
-            default_context: 3,
             finish_tx: None,
         };
         (state, tmp)
@@ -373,24 +485,27 @@ mod tests {
         std::fs::write(&file, edited).unwrap();
 
         let git = GitModule::new(&repo_root).unwrap();
-        let mut state = AppState {
-            metadata: metadata(),
-            diff_data: diff(),
+        let state = AppState {
+            diff: Arc::new(Mutex::new(DiffRuntime {
+                metadata: metadata(),
+                // Empty startup diff forces every request to regenerate from the
+                // git repo at the requested context rather than the default cache.
+                diff_data: DiffResponse { files: vec![] },
+                diff_source: DiffSource {
+                    mode: "working".into(),
+                    args: vec![],
+                    include_untracked: false,
+                },
+                default_context: 3,
+            })),
             repo_root,
             csrf_token: CSRF.into(),
             output_path: String::new(),
             git: Arc::new(Mutex::new(git)),
             shutdown: Arc::new(Shutdown::new()),
             config: crate::config::Config::default(),
-            diff_source: DiffSource {
-                mode: "working".into(),
-                args: vec![],
-                include_untracked: false,
-            },
-            default_context: 3,
             finish_tx: None,
         };
-        state.diff_data = DiffResponse { files: vec![] };
 
         let count_lines = |v: &serde_json::Value| -> usize {
             v["files"][0]["hunks"][0]["changes"].as_array().map_or(0, |a| a.len())
@@ -420,8 +535,89 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_file_falls_back_to_filesystem_when_not_in_git() {
-        let (state, tmp) = test_state();
+    async fn diff_mode_switch_recomputes_and_updates_metadata() {
+        // Repo with a committed file plus a staged-only change, so `working`
+        // and `staged` diffs differ and switching modes is observable.
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(tmp.path()).unwrap();
+        let repo_root = tmp.path().to_string_lossy().to_string();
+        let file = tmp.path().join("f.txt");
+        std::fs::write(&file, "a\nb\nc\n").unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index.add_path(Path::new("f.txt")).unwrap();
+            index.write().unwrap();
+            let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+            let sig = git2::Signature::now("t", "t@t").unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[]).unwrap();
+        }
+        // Stage a change (present in `staged`, and also in `working`).
+        std::fs::write(&file, "a\nB\nc\n").unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index.add_path(Path::new("f.txt")).unwrap();
+            index.write().unwrap();
+        }
+
+        let git = GitModule::new(&repo_root).unwrap();
+        let state = AppState {
+            diff: Arc::new(Mutex::new(DiffRuntime {
+                metadata: metadata(),
+                diff_data: DiffResponse { files: vec![] },
+                diff_source: DiffSource {
+                    mode: "working".into(),
+                    args: vec![],
+                    include_untracked: false,
+                },
+                default_context: 3,
+            })),
+            repo_root,
+            csrf_token: CSRF.into(),
+            output_path: String::new(),
+            git: Arc::new(Mutex::new(git)),
+            shutdown: Arc::new(Shutdown::new()),
+            config: crate::config::Config::default(),
+            finish_tx: None,
+        };
+
+        let res = create_api_router(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/diff-mode")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"mode":"staged"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status().as_u16(), 200);
+        let json = body_json(res).await;
+        // The response carries fresh metadata (mode reflected in base_ref) and a
+        // recomputed diff for the staged file.
+        assert_eq!(json["metadata"]["baseRef"], "staged");
+        assert_eq!(json["diff"]["files"][0]["newPath"], "f.txt");
+    }
+
+    #[tokio::test]
+    async fn diff_mode_switch_rejects_unknown_mode() {
+        let (state, _tmp) = test_state();
+        let res = create_api_router(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/diff-mode")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"mode":"bogus"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status().as_u16(), 400);
+    }
+
+    #[tokio::test]
+    async fn get_file_falls_back_to_filesystem_when_not_in_git() {        let (state, tmp) = test_state();
         std::fs::write(tmp.path().join("notes.txt"), "hello from disk").unwrap();
         let res = create_api_router(state)
             .oneshot(Request::builder().uri("/api/v1/file/notes.txt").body(Body::empty()).unwrap())
