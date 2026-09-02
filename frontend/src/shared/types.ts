@@ -152,6 +152,8 @@ export interface UserPreferences {
   theme: ThemeId;
   /** Diff text size in px. */
   fontSize: number;
+  /** Diff line-height as a multiple of the font size. */
+  lineHeight: number;
   /** Monospace font used for diff code and other code UI. */
   codeFont: CodeFontId;
   /** Sans-serif font used for the app chrome. */

@@ -53,9 +53,20 @@ const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 20;
 const DEFAULT_FONT_SIZE = 13;
 
+const MIN_LINE_HEIGHT = 1.2;
+const MAX_LINE_HEIGHT = 2.4;
+// 20/13 reproduces pierre's default row ratio, so existing reviews look identical.
+const DEFAULT_LINE_HEIGHT = Math.round((20 / 13) * 10) / 10;
+
 function clampFontSize(size: number): number {
   if (!Number.isFinite(size)) return DEFAULT_FONT_SIZE;
   return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(size)));
+}
+
+function clampLineHeight(ratio: number): number {
+  if (!Number.isFinite(ratio)) return DEFAULT_LINE_HEIGHT;
+  const clamped = Math.min(MAX_LINE_HEIGHT, Math.max(MIN_LINE_HEIGHT, ratio));
+  return Math.round(clamped * 10) / 10;
 }
 
 function loadPreferences(): UserPreferences {
@@ -66,12 +77,13 @@ function loadPreferences(): UserPreferences {
       return {
         theme: normalizeThemeId(parsed.theme),
         fontSize: clampFontSize(parsed.fontSize ?? DEFAULT_FONT_SIZE),
+        lineHeight: clampLineHeight(parsed.lineHeight ?? DEFAULT_LINE_HEIGHT),
         codeFont: normalizeCodeFontId(parsed.codeFont),
         uiFont: normalizeUiFontId(parsed.uiFont),
       };
     }
   } catch { /* ignore */ }
-  return { theme: DEFAULT_THEME, fontSize: DEFAULT_FONT_SIZE, codeFont: DEFAULT_CODE_FONT, uiFont: DEFAULT_UI_FONT };
+  return { theme: DEFAULT_THEME, fontSize: DEFAULT_FONT_SIZE, lineHeight: DEFAULT_LINE_HEIGHT, codeFont: DEFAULT_CODE_FONT, uiFont: DEFAULT_UI_FONT };
 }
 
 function savePreferences(prefs: UserPreferences): void {
@@ -230,6 +242,8 @@ interface SettingsModalProps {
   onSelectContext: (level: ContextLevel) => void;
   fontSize: number;
   onChangeFontSize: (delta: number) => void;
+  lineHeight: number;
+  onChangeLineHeight: (delta: number) => void;
   codeFont: CodeFontId;
   onSelectCodeFont: (id: CodeFontId) => void;
   uiFont: UiFontId;
@@ -239,7 +253,7 @@ interface SettingsModalProps {
 
 function SettingsModal({
   open, onOpenChange, viewType, onToggleView, theme, onSelectTheme,
-  contextLevel, onSelectContext, fontSize, onChangeFontSize,
+  contextLevel, onSelectContext, fontSize, onChangeFontSize, lineHeight, onChangeLineHeight,
   codeFont, onSelectCodeFont, uiFont, onSelectUiFont, onOpenShortcuts,
 }: SettingsModalProps): React.JSX.Element {
   return (
@@ -287,6 +301,18 @@ function SettingsModal({
             <span className="font-size-value" aria-live="polite" title="Diff font size">{fontSize}px</span>
             <button className="btn toolbar-btn font-size-btn" onClick={() => onChangeFontSize(1)} type="button" aria-label="Increase diff font size" title="Increase font size" disabled={fontSize >= MAX_FONT_SIZE}>
               A+
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <span className="settings-label" id="settings-lineheight-label">Line height</span>
+          <div className="font-size-control" role="group" aria-labelledby="settings-lineheight-label">
+            <button className="btn toolbar-btn font-size-btn" onClick={() => onChangeLineHeight(-0.1)} type="button" aria-label="Decrease diff line height" title="Decrease line height" disabled={lineHeight <= MIN_LINE_HEIGHT}>
+              −
+            </button>
+            <span className="font-size-value" aria-live="polite" title="Diff line height">{lineHeight.toFixed(1)}×</span>
+            <button className="btn toolbar-btn font-size-btn" onClick={() => onChangeLineHeight(0.1)} type="button" aria-label="Increase diff line height" title="Increase line height" disabled={lineHeight >= MAX_LINE_HEIGHT}>
+              +
             </button>
           </div>
         </div>
@@ -380,6 +406,8 @@ function AppContent({
   onSelectContext,
   fontSize,
   onChangeFontSize,
+  lineHeight,
+  onChangeLineHeight,
   codeFont,
   onSelectCodeFont,
   uiFont,
@@ -398,6 +426,8 @@ function AppContent({
   onSelectContext: (level: ContextLevel) => void;
   fontSize: number;
   onChangeFontSize: (delta: number) => void;
+  lineHeight: number;
+  onChangeLineHeight: (delta: number) => void;
   codeFont: CodeFontId;
   onSelectCodeFont: (id: CodeFontId) => void;
   uiFont: UiFontId;
@@ -657,6 +687,8 @@ function AppContent({
         onSelectContext={onSelectContext}
         fontSize={fontSize}
         onChangeFontSize={onChangeFontSize}
+        lineHeight={lineHeight}
+        onChangeLineHeight={onChangeLineHeight}
         codeFont={codeFont}
         onSelectCodeFont={onSelectCodeFont}
         uiFont={uiFont}
@@ -687,6 +719,7 @@ export function App(): React.JSX.Element {
   const initialPrefs = useMemo(loadPreferences, []);
   const [theme, setTheme] = useState<ThemeId>(initialPrefs.theme);
   const [fontSize, setFontSize] = useState<number>(initialPrefs.fontSize);
+  const [lineHeight, setLineHeight] = useState<number>(initialPrefs.lineHeight);
   const [codeFont, setCodeFont] = useState<CodeFontId>(initialPrefs.codeFont);
   const [uiFont, setUiFont] = useState<UiFontId>(initialPrefs.uiFont);
   const [contextLevel, setContextLevel] = useState<ContextLevel>(loadContextLevel);
@@ -707,15 +740,15 @@ export function App(): React.JSX.Element {
     // inside its shadow DOM (custom properties pierce the shadow boundary);
     // line-height tracks pierre's own 13px→20px ratio so rows stay legible.
     root.style.setProperty('--diffs-font-size', `${fontSize}px`);
-    root.style.setProperty('--diffs-line-height', `${Math.round(fontSize * (20 / 13))}px`);
+    root.style.setProperty('--diffs-line-height', `${Math.round(fontSize * lineHeight)}px`);
     // --font-mono/--font-sans drive the app chrome; --diffs-font-family is the
     // code font inside pierre's shadow DOM (same pierce-the-boundary trick).
     const codeStack = resolveCodeFontStack(codeFont);
     root.style.setProperty('--font-mono', codeStack);
     root.style.setProperty('--diffs-font-family', codeStack);
     root.style.setProperty('--font-sans', resolveUiFontStack(uiFont));
-    savePreferences({ theme, fontSize, codeFont, uiFont });
-  }, [theme, fontSize, codeFont, uiFont]);
+    savePreferences({ theme, fontSize, lineHeight, codeFont, uiFont });
+  }, [theme, fontSize, lineHeight, codeFont, uiFont]);
 
   const fetchDiff = useCallback((level: ContextLevel): Promise<DiffResponse> => {
     return fetch(`/api/v1/diff?context=${level}`).then((r) => {
@@ -793,6 +826,10 @@ export function App(): React.JSX.Element {
     setFontSize((prev) => clampFontSize(prev + delta));
   }, []);
 
+  const handleChangeLineHeight = useCallback((delta: number) => {
+    setLineHeight((prev) => clampLineHeight(prev + delta));
+  }, []);
+
   const handleSelectCodeFont = useCallback((id: CodeFontId) => {
     setCodeFont(id);
   }, []);
@@ -852,6 +889,8 @@ export function App(): React.JSX.Element {
             onSelectContext={handleSelectContext}
             fontSize={fontSize}
             onChangeFontSize={handleChangeFontSize}
+            lineHeight={lineHeight}
+            onChangeLineHeight={handleChangeLineHeight}
             codeFont={codeFont}
             onSelectCodeFont={handleSelectCodeFont}
             uiFont={uiFont}
