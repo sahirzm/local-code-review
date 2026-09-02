@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react';
-import type { Comment, ReviewSession, ReviewMetadata } from '../../../shared/types.js';
+import type { Comment, ReviewSession, ReviewMetadata, ParsedFileDiff } from '../../../shared/types.js';
 import { saveSession, loadSession, clearSession, getSessionKey, hashRepoPath } from './useSession.js';
+import { reconcileComments, repinComment as repinCommentFn } from '../utils/pin.js';
 
 interface ReviewState {
   comments: Comment[];
@@ -12,6 +13,7 @@ type Action =
   | { type: 'ADD'; comment: Comment }
   | { type: 'EDIT'; id: string; updates: { text?: string; category?: Comment['category'] } }
   | { type: 'SET_STATUS'; id: string; status: NonNullable<Comment['status']> }
+  | { type: 'REPLACE_ALL'; comments: Comment[] }
   | { type: 'DELETE'; id: string }
   | { type: 'SET_VIEW_MODE'; viewMode: 'split' | 'unified' }
   | { type: 'MARK_REVIEWED'; filePath: string }
@@ -27,6 +29,10 @@ export interface ReviewStore {
   editComment: (id: string, updates: { text?: string; category?: Comment['category'] }) => void;
   setCommentStatus: (id: string, status: NonNullable<Comment['status']>) => void;
   deleteComment: (id: string) => void;
+  /** Reconcile every pinned comment against a freshly-fetched diff. */
+  reconcileAgainstDiff: (files: ParsedFileDiff[]) => void;
+  /** Try to re-pin an orphaned comment against the current diff. Returns whether it succeeded. */
+  repinComment: (id: string, files: ParsedFileDiff[]) => boolean;
   getCommentsForFile: (filePath: string) => Comment[];
   getCommentsForLine: (filePath: string, line: number, side: 'old' | 'new') => Comment[];
   getAllComments: () => Comment[];
@@ -52,6 +58,8 @@ function reducer(state: ReviewState, action: Action): ReviewState {
             : c,
         ),
       };
+    case 'REPLACE_ALL':
+      return { ...state, comments: action.comments };
     case 'DELETE':
       return { ...state, comments: state.comments.filter((c) => c.id !== action.id) };
     case 'SET_STATUS':
@@ -196,6 +204,25 @@ export function ReviewStoreProvider({ children, metadata }: ProviderProps): Reac
     [],
   );
 
+  const reconcileAgainstDiff = useCallback((files: ParsedFileDiff[]) => {
+    const next = reconcileComments(stateRef.current.comments, files);
+    // Only dispatch when something actually changed to avoid a redundant render.
+    const changed = next.some((c, i) => c !== stateRef.current.comments[i]);
+    if (changed) dispatch({ type: 'REPLACE_ALL', comments: next });
+  }, []);
+
+  const repinComment = useCallback((id: string, files: ParsedFileDiff[]): boolean => {
+    const target = stateRef.current.comments.find((c) => c.id === id);
+    if (!target) return false;
+    const repinned = repinCommentFn(target, files);
+    if (!repinned) return false;
+    dispatch({
+      type: 'REPLACE_ALL',
+      comments: stateRef.current.comments.map((c) => (c.id === id ? repinned : c)),
+    });
+    return true;
+  }, []);
+
   const setViewMode = useCallback((mode: 'split' | 'unified') => {
     dispatch({ type: 'SET_VIEW_MODE', viewMode: mode });
   }, []);
@@ -249,6 +276,8 @@ export function ReviewStoreProvider({ children, metadata }: ProviderProps): Reac
       editComment,
       setCommentStatus,
       deleteComment,
+      reconcileAgainstDiff,
+      repinComment,
       getCommentsForFile,
       getCommentsForLine,
       getAllComments,
@@ -258,7 +287,7 @@ export function ReviewStoreProvider({ children, metadata }: ProviderProps): Reac
       unmarkFileReviewed,
       isFileReviewed,
     }),
-    [state.comments, state.viewMode, state.reviewedFiles, addComment, editComment, setCommentStatus, deleteComment, getCommentsForFile, getCommentsForLine, getAllComments, setViewMode, discardReview, markFileReviewed, unmarkFileReviewed, isFileReviewed],
+    [state.comments, state.viewMode, state.reviewedFiles, addComment, editComment, setCommentStatus, deleteComment, reconcileAgainstDiff, repinComment, getCommentsForFile, getCommentsForLine, getAllComments, setViewMode, discardReview, markFileReviewed, unmarkFileReviewed, isFileReviewed],
   );
 
   return <ReviewContext.Provider value={value}>{children}</ReviewContext.Provider>;

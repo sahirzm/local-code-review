@@ -402,7 +402,14 @@ function AppContent({
   uiFont: UiFontId;
   onSelectUiFont: (id: UiFontId) => void;
 }): React.JSX.Element {
-  const { viewMode, setViewMode, comments, isFileReviewed, markFileReviewed, unmarkFileReviewed } = useReviewStore();
+  const { viewMode, setViewMode, comments, isFileReviewed, markFileReviewed, unmarkFileReviewed, reconcileAgainstDiff } = useReviewStore();
+  // Re-pin/orphan comments whenever the diff changes (initial load, refresh, or
+  // a context change fetches a new diff). Skip the very first run so freshly
+  // restored comments aren't reconciled before the diff they were pinned
+  // against is known to match.
+  useEffect(() => {
+    reconcileAgainstDiff(diffFiles);
+  }, [diffFiles, reconcileAgainstDiff]);
   // Must run inside DiffWorkerPoolProvider: in worker-pool mode pierre reads its
   // highlight theme from the pool's render options, not the per-file `theme`
   // prop. Called from App() (outside the provider) the hook is a no-op and the

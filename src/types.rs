@@ -20,6 +20,15 @@ pub struct Comment {
     /// field existed (older session backups omit it).
     #[serde(default)]
     pub status: CommentStatus,
+    /// Verbatim content of the pinned line range, used for orphan detection.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pin_snippet: Option<String>,
+    /// Number of lines the comment was pinned across.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pin_line_count: Option<u32>,
+    /// Why a comment became orphaned; only set when `status` is `orphaned`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orphan_reason: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -30,6 +39,7 @@ pub enum CommentStatus {
     #[default]
     Open,
     Resolved,
+    Orphaned,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

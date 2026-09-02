@@ -13,6 +13,7 @@ import {
   selectionToAnchor,
   type DiffAnnotationMetadata,
 } from './diff/adapter.js';
+import { computePin } from '../utils/pin.js';
 import type { ShikiThemePair } from './diff/shikiTheme.js';
 
 export type PierreViewType = 'split' | 'unified';
@@ -133,6 +134,7 @@ export function FileDiff({
               mode="create"
               onSubmit={(text: string, category: Comment['category']) => {
                 const isRange = activeForm.endLine !== activeForm.line;
+                const pin = computePin([file], filePath, activeForm.side, activeForm.line, activeForm.endLine);
                 addComment({
                   type: isRange ? 'range' : 'line',
                   category,
@@ -141,6 +143,8 @@ export function FileDiff({
                   startLine: activeForm.line,
                   endLine: activeForm.endLine,
                   side: activeForm.side,
+                  status: 'open',
+                  ...(pin ?? {}),
                 });
                 setActiveForm(null);
               }}

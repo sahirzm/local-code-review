@@ -390,6 +390,9 @@ impl App {
                 end_line: pending.end_line,
                 side: pending.side,
                 status: crate::types::CommentStatus::Open,
+                pin_snippet: None,
+                pin_line_count: None,
+                orphan_reason: None,
                 created_at: now.clone(),
                 updated_at: now,
             });
@@ -707,6 +710,9 @@ mod tests {
             end_line: Some(5),
             side: Some("new".into()),
             status: crate::types::CommentStatus::Open,
+            pin_snippet: None,
+            pin_line_count: None,
+            orphan_reason: None,
             created_at: "t".into(),
             updated_at: "t".into(),
         });

@@ -586,6 +586,9 @@ impl Default for Comment {
             end_line: None,
             side: None,
             status: crate::types::CommentStatus::Open,
+            pin_snippet: None,
+            pin_line_count: None,
+            orphan_reason: None,
             created_at: String::new(),
             updated_at: String::new(),
         }
