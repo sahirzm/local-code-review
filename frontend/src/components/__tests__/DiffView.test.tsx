@@ -47,12 +47,12 @@ function file(path: string): ParsedFileDiff {
 
 describe('DiffView', () => {
   it('renders a loading skeleton when files is null', () => {
-    render(<DiffView files={null} currentIndex={0} viewType="unified" themeType="dark" syntaxTheme={SYNTAX_THEME} />, { wrapper });
+    render(<DiffView files={null} currentIndex={0} viewType="unified" themeType="dark" syntaxTheme={SYNTAX_THEME} fontSize={13} lineHeight={1.5} />, { wrapper });
     expect(screen.getByRole('status', { name: 'Loading diffs' })).toBeTruthy();
   });
 
   it('renders an empty state when there are no files', () => {
-    render(<DiffView files={[]} currentIndex={0} viewType="unified" themeType="dark" syntaxTheme={SYNTAX_THEME} />, { wrapper });
+    render(<DiffView files={[]} currentIndex={0} viewType="unified" themeType="dark" syntaxTheme={SYNTAX_THEME} fontSize={13} lineHeight={1.5} />, { wrapper });
     expect(screen.getByText('No files changed')).toBeTruthy();
   });
 
@@ -64,6 +64,8 @@ describe('DiffView', () => {
         viewType="unified"
         themeType="dark"
         syntaxTheme={SYNTAX_THEME}
+        fontSize={13}
+        lineHeight={1.5}
       />,
       { wrapper },
     );
@@ -81,10 +83,36 @@ describe('DiffView', () => {
         viewType="unified"
         themeType="dark"
         syntaxTheme={SYNTAX_THEME}
+        fontSize={13}
+        lineHeight={1.5}
       />,
       { wrapper },
     );
     expect(screen.getByText('b.ts')).toBeTruthy();
     expect(screen.queryByText('a.ts')).toBeNull();
+  });
+
+  it('remounts the file surface when the font size changes', () => {
+    const props = {
+      files: [file('a.ts')],
+      currentIndex: 0,
+      viewType: 'unified' as const,
+      themeType: 'dark' as const,
+      syntaxTheme: SYNTAX_THEME,
+      lineHeight: 1.5,
+    };
+    const { container, rerender } = render(
+      <DiffView {...props} fontSize={13} />,
+      { wrapper },
+    );
+    const before = container.querySelector('.file-diff');
+    expect(before).not.toBeNull();
+
+    // A font-size change must remount FileDiff (new React key) so @pierre/diffs
+    // re-measures its cached row layout at the new size.
+    rerender(<DiffView {...props} fontSize={18} />);
+    const after = container.querySelector('.file-diff');
+    expect(after).not.toBeNull();
+    expect(after).not.toBe(before);
   });
 });

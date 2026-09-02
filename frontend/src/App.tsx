@@ -677,7 +677,7 @@ function AppContent({
         <Sidebar files={fileChanges} onFileClick={handleFileClick} activeFile={currentPath} />
         <div className="app-main">
           <OverallComments activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
-          <DiffView files={diffFiles} currentIndex={safeIndex} viewType={viewType} themeType={themeMode} syntaxTheme={syntaxTheme} activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
+          <DiffView files={diffFiles} currentIndex={safeIndex} viewType={viewType} themeType={themeMode} syntaxTheme={syntaxTheme} fontSize={fontSize} lineHeight={lineHeight} activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
         </div>
       </div>
       <StatusBar totalFiles={fileChanges.length} />
