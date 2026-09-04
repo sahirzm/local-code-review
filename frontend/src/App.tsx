@@ -23,6 +23,16 @@ import { CommentManager } from './components/CommentManager.js';
 import { DiffModeSelector } from './components/DiffModeSelector.js';
 import { SummaryPage } from './components/SummaryPage.js';
 import { generateClientMarkdown, downloadMarkdown } from './utils/client-markdown.js';
+import {
+  loadPreferences,
+  savePreferences,
+  clampFontSize,
+  clampLineHeight,
+  MIN_FONT_SIZE,
+  MAX_FONT_SIZE,
+  MIN_LINE_HEIGHT,
+  MAX_LINE_HEIGHT,
+} from './utils/preferences.js';
 import { cleanExpiredSessions } from './hooks/useSession.js';
 import { useQuotaMonitor } from './hooks/useQuotaMonitor.js';
 import { useKeyboardShortcuts, SHORTCUT_LIST } from './hooks/useKeyboardShortcuts.js';
