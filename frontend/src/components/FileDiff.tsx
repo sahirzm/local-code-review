@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ChevronRight, ChevronDown, Check, Circle, MessageSquare, MessageSquarePlus } from 'lucide-react';
 import { FileDiff as PierreFileDiff } from '@pierre/diffs/react';
 import type { DiffLineAnnotation, SelectedLineRange } from '@pierre/diffs';
-import type { ParsedFileDiff, Comment } from '../../../shared/types.js';
+import type { ParsedFileDiff, Comment } from '../shared/types.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
 import { CommentForm } from './CommentForm.js';
 import { CommentWidget } from './CommentWidget.js';

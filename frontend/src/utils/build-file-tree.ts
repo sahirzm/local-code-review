@@ -1,4 +1,4 @@
-import type { FileChange, FileTreeNode } from '../../../shared/types.js';
+import type { FileChange, FileTreeNode } from '../shared/types.js';
 
 interface TreeBuildNode {
   name: string;

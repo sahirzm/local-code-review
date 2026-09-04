@@ -1,4 +1,4 @@
-import type { Comment } from '../../../shared/types.js';
+import type { Comment } from '../shared/types.js';
 
 function formatComment(c: Comment): string {
   return `- [${c.category}] ${c.text}`;

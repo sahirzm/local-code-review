@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, type KeyboardEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import type { Comment } from '../../../shared/types.js';
+import type { Comment } from '../shared/types.js';
 
 const MAX_CHARS = 2000;
 const CATEGORIES: Comment['category'][] = ['fix', 'question', 'suggestion', 'nit'];

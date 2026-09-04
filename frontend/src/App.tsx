@@ -6,7 +6,7 @@ import {
 import { Toaster, toast } from 'sonner';
 import { Modal } from './components/ui/Modal.js';
 import { TooltipProvider, Tooltip } from './components/ui/Tooltip.js';
-import type { ReviewMetadata, DiffResponse, ParsedFileDiff, FinishResponse, FileChange, Comment, ThemeId, CodeFontId, UiFontId } from '../../shared/types.js';
+import type { ReviewMetadata, DiffResponse, ParsedFileDiff, FinishResponse, FileChange, Comment, ThemeId, CodeFontId, UiFontId } from './shared/types.js';
 import { THEMES } from './themes.js';
 import {
   CODE_FONTS, UI_FONTS,

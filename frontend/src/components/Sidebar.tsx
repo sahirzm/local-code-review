@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { PanelLeftClose, PanelLeftOpen, ChevronRight, ChevronDown, MessageSquare, Circle, Check } from 'lucide-react';
-import type { FileChange, FileTreeNode } from '../../../shared/types.js';
+import type { FileChange, FileTreeNode } from '../shared/types.js';
 import { buildFileTree } from '../utils/build-file-tree.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
 import { useSidebarWidth } from '../hooks/useSidebarWidth.js';

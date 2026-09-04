@@ -1,4 +1,4 @@
-import type { ReviewSession } from '../../../shared/types.js';
+import type { ReviewSession } from '../shared/types.js';
 
 const SESSION_PREFIX = 'local-review:';
 const EXPIRY_MS = 14 * 24 * 60 * 60 * 1000; // 14 days

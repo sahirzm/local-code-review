@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react';
-import type { Comment, ReviewSession, ReviewMetadata, ParsedFileDiff } from '../../../shared/types.js';
+import type { Comment, ReviewSession, ReviewMetadata, ParsedFileDiff } from '../shared/types.js';
 import { saveSession, loadSession, clearSession, getSessionKey, hashRepoPath } from './useSession.js';
 import { reconcileComments, repinComment as repinCommentFn } from '../utils/pin.js';
 

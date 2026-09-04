@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { X, Check, RotateCcw, Trash2, CornerUpRight, Link2 } from 'lucide-react';
 import { Modal } from './ui/Modal.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
-import type { Comment, CommentStatus, ParsedFileDiff } from '../../../shared/types.js';
+import type { Comment, CommentStatus, ParsedFileDiff } from '../shared/types.js';
 
 type StatusTab = 'all' | 'open' | 'resolved' | 'orphaned';
 

@@ -1,4 +1,4 @@
-import type { ParsedFileDiff } from '../../../shared/types.js';
+import type { ParsedFileDiff } from '../shared/types.js';
 import { FileDiff, type PierreViewType } from './FileDiff.js';
 import type { ShikiThemePair } from './diff/shikiTheme.js';
 

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Download, Copy, Check, ArrowLeft, X } from 'lucide-react';
-import type { Comment } from '../../../shared/types.js';
+import type { Comment } from '../shared/types.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
 import { downloadMarkdown } from '../utils/client-markdown.js';
 

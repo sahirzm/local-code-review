@@ -46,3 +46,5 @@ try {
 } catch {
   // localStorage unavailable or malformed blob — the app applies defaults on mount.
 }
+
+export {};

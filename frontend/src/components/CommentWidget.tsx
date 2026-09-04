@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Pencil, Trash2, Check, RotateCcw } from 'lucide-react';
-import type { Comment } from '../../../shared/types.js';
+import type { Comment } from '../shared/types.js';
 import { CommentForm, renderTextWithCode } from './CommentForm.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
 

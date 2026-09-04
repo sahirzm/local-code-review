@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Comment } from '../../../shared/types.js';
+import type { Comment } from '../shared/types.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
 import { CommentForm } from './CommentForm.js';
 import { CommentWidget } from './CommentWidget.js';
