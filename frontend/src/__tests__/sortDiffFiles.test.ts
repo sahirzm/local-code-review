@@ -17,9 +17,21 @@ function file(path: string, oldPath?: string): ParsedFileDiff {
 }
 
 describe('sortDiffFiles', () => {
-  it('orders files by display path regardless of the backend order', () => {
-    const sorted = sortDiffFiles([file('src/z.ts'), file('README.md'), file('src/a.ts')]);
-    expect(sorted.map((f) => f.newPath)).toEqual(['README.md', 'src/a.ts', 'src/z.ts']);
+  it('matches sidebar tree order with directories before files', () => {
+    const sorted = sortDiffFiles([
+      file('README.md'),
+      file('src/nested/b.ts'),
+      file('src/z.ts'),
+      file('src/nested/a.ts'),
+      file('src/a.ts'),
+    ]);
+    expect(sorted.map((f) => f.newPath)).toEqual([
+      'src/nested/a.ts',
+      'src/nested/b.ts',
+      'src/a.ts',
+      'src/z.ts',
+      'README.md',
+    ]);
   });
 
   it('sorts by newPath for renamed files (its display path)', () => {

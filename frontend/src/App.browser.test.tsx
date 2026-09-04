@@ -26,4 +26,13 @@ describe('App (browser smoke)', () => {
     // The file tree lists a mocked file (exact match avoids the diff's "src/index.ts").
     await expect.element(screen.getByText('index.ts', { exact: true })).toBeInTheDocument();
   });
+
+  it('updates the sidebar reviewed-file progress', async () => {
+    const screen = render(<App />);
+    await expect.element(screen.getByText('Files 0/4')).toBeInTheDocument();
+
+    await screen.getByRole('button', { name: 'Mark as reviewed' }).click();
+
+    await expect.element(screen.getByText('Files 1/4')).toBeInTheDocument();
+  });
 });

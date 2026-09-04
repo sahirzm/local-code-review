@@ -59,12 +59,27 @@ function loadContextLevel(): ContextLevel {
 }
 
 
-// The backend returns files in git's diff order, which doesn't match the
-// alphabetical sidebar tree. Sort by display path so the diff view, file
-// navigation, and sidebar all agree on order.
+// Match the sidebar tree: directories before files at every level, with names
+// sorted alphabetically within each group.
 export function sortDiffFiles(files: ParsedFileDiff[]): ParsedFileDiff[] {
+  const comparePaths = (left: string, right: string): number => {
+    const a = left.split('/');
+    const b = right.split('/');
+    const length = Math.min(a.length, b.length);
+
+    for (let i = 0; i < length; i++) {
+      if (a[i] === b[i]) continue;
+      const aIsDirectory = i < a.length - 1;
+      const bIsDirectory = i < b.length - 1;
+      if (aIsDirectory !== bIsDirectory) return aIsDirectory ? -1 : 1;
+      return a[i].localeCompare(b[i]);
+    }
+
+    return a.length - b.length;
+  };
+
   return [...files].sort((a, b) =>
-    (a.newPath || a.oldPath).localeCompare(b.newPath || b.oldPath),
+    comparePaths(a.newPath || a.oldPath, b.newPath || b.oldPath),
   );
 }
 

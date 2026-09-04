@@ -48,7 +48,10 @@ export function Sidebar({ files, onFileClick, activeFile }: SidebarProps): React
     [filteredFiles, reviewedFiles, commentCounts],
   );
 
-  const reviewedCount = reviewedFiles.length;
+  const reviewedCount = useMemo(() => {
+    const currentPaths = new Set(files.map((file) => file.path));
+    return reviewedFiles.filter((path) => currentPaths.has(path)).length;
+  }, [files, reviewedFiles]);
 
   const toggleQuickFilter = useCallback((f: QuickFilter) => {
     setQuickFilters((prev) => {
