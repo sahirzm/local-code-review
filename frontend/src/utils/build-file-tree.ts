@@ -36,7 +36,33 @@ export function buildFileTree(
     }
   }
 
-  return sortTree(convertNodes(root, reviewedSet, commentCounts));
+  return sortTree(collapseTree(convertNodes(root, reviewedSet, commentCounts)));
+}
+
+// Collapse chains of directories that contain only a single subdirectory into
+// a single node (e.g. `a` > `b` > `c` becomes `a/b/c`).
+function collapseTree(nodes: FileTreeNode[]): FileTreeNode[] {
+  return nodes.map((node) => {
+    if (node.type !== 'directory' || !node.children) return node;
+
+    let current = node;
+    while (
+      current.children &&
+      current.children.length === 1 &&
+      current.children[0].type === 'directory'
+    ) {
+      const child = current.children[0];
+      current = {
+        ...child,
+        name: `${current.name}/${child.name}`,
+      };
+    }
+
+    return {
+      ...current,
+      children: current.children ? collapseTree(current.children) : current.children,
+    };
+  });
 }
 
 function convertNodes(

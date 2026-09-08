@@ -18,17 +18,29 @@ describe('buildFileTree', () => {
     expect(tree[1]).toMatchObject({ name: 'README.md', type: 'file', path: 'README.md' });
   });
 
-  it('nests files under directory nodes', () => {
+  it('collapses single-child directory chains into one node', () => {
     const tree = buildFileTree([file('src/utils/helpers.ts')], [], new Map());
     expect(tree).toHaveLength(1);
-    expect(tree[0]).toMatchObject({ name: 'src', type: 'directory' });
+    expect(tree[0]).toMatchObject({ name: 'src/utils', type: 'directory' });
     expect(tree[0].children).toHaveLength(1);
-    expect(tree[0].children![0]).toMatchObject({ name: 'utils', type: 'directory' });
-    expect(tree[0].children![0].children![0]).toMatchObject({
+    expect(tree[0].children![0]).toMatchObject({
       name: 'helpers.ts',
       type: 'file',
       path: 'src/utils/helpers.ts',
     });
+  });
+
+  it('does not collapse a directory that has multiple children', () => {
+    const tree = buildFileTree(
+      [file('src/utils/a.ts'), file('src/index.ts')],
+      [],
+      new Map(),
+    );
+    expect(tree).toHaveLength(1);
+    expect(tree[0]).toMatchObject({ name: 'src', type: 'directory' });
+    expect(tree[0].children).toHaveLength(2);
+    const utils = tree[0].children!.find((n) => n.name === 'utils')!;
+    expect(utils).toMatchObject({ type: 'directory' });
   });
 
   it('sorts directories before files, alphabetically within each group', () => {
@@ -80,13 +92,10 @@ describe('buildFileTree', () => {
     expect(tree[0].children).toHaveLength(2);
   });
 
-  it('handles deeply nested paths', () => {
+  it('collapses deeply nested single-child paths', () => {
     const tree = buildFileTree([file('a/b/c/d/e.ts')], [], new Map());
-    let node = tree[0];
-    for (const name of ['a', 'b', 'c', 'd']) {
-      expect(node).toMatchObject({ name, type: 'directory' });
-      node = node.children![0];
-    }
-    expect(node).toMatchObject({ name: 'e.ts', type: 'file' });
+    expect(tree).toHaveLength(1);
+    expect(tree[0]).toMatchObject({ name: 'a/b/c/d', type: 'directory' });
+    expect(tree[0].children![0]).toMatchObject({ name: 'e.ts', type: 'file' });
   });
 });
