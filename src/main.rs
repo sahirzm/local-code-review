@@ -76,6 +76,11 @@ async fn main() -> anyhow::Result<()> {
     };
     let state = review::build_server_state(&inputs, git, &cwd, include_untracked).await?;
 
+    if state.metadata.files.is_empty() {
+        eprintln!("No files to review in the diff. Not starting the browser.");
+        return Ok(());
+    }
+
     let (_port, shutdown, _handle) =
         review::start_and_open(state, port, no_open, server::Shutdown::new()).await?;
 
