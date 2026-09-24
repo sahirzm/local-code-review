@@ -15,9 +15,19 @@ interface SidebarProps {
   activeFile?: string;
   /** Opens the review-wide comment composer. */
   onAddOverallComment: () => void;
+  repoName: string;
+  /** e.g. `main..feature`. */
+  diffRange: string;
 }
 
-export function Sidebar({ files, onFileClick, activeFile, onAddOverallComment }: SidebarProps): React.JSX.Element {
+export function Sidebar({
+  files,
+  onFileClick,
+  activeFile,
+  onAddOverallComment,
+  repoName,
+  diffRange,
+}: SidebarProps): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -93,6 +103,11 @@ export function Sidebar({ files, onFileClick, activeFile, onAddOverallComment }:
         aria-label="File navigator"
         style={{ ['--sidebar-width' as string]: `${width}px` }}
       >
+        <div className="sidebar-breadcrumb" title={`${repoName} ${diffRange}`}>
+          <span className="sidebar-breadcrumb-repo">{repoName}</span>
+          <span className="sidebar-breadcrumb-sep" aria-hidden="true">/</span>
+          <code className="sidebar-breadcrumb-range">{diffRange}</code>
+        </div>
         <div className="sidebar-header">
           <span className="sidebar-title">
             Files {reviewedCount}/{files.length}

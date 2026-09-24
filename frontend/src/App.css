@@ -354,14 +354,46 @@ body {
 
 .header h1 {
   font-size: var(--text-xl);
+  font-family: var(--font-mono);
+  font-weight: 600;
   color: var(--color-text-heading);
-  /* Let the title shrink and ellipsis instead of pushing the toolbar off the
-     row: a long ref/path was overflowing the header before. */
+  /* Let the title shrink instead of pushing the toolbar off the row: a long
+     ref/path was overflowing the header before. */
+  display: flex;
+  align-items: baseline;
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   white-space: nowrap;
   overflow: hidden;
+}
+
+/* The directory is context; the filename answers "where am I", so only the
+ * directory is allowed to ellipsis away on a deep path. */
+.file-title-dir {
+  color: var(--color-text-muted);
+  font-weight: 400;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.file-title-name {
+  flex: 0 0 auto;
+}
+
+.header-actions {
+  margin-top: 10px;
+}
+
+.header-actions .toolbar {
+  justify-content: flex-start;
+  flex: 1;
+}
+
+/* Reads as "Next → 1 / 4", so it needs air on the left. */
+.header-actions .file-position {
+  margin-left: 4px;
 }
 
 .header code {
@@ -1338,6 +1370,32 @@ body {
 .sidebar-resizer.resizing {
   background: var(--color-accent);
   opacity: 0.5;
+}
+
+.sidebar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 10px 0;
+  font-size: var(--text-xs);
+  min-width: 0;
+}
+
+.sidebar-breadcrumb-repo {
+  color: var(--color-text-dim);
+  white-space: nowrap;
+}
+
+.sidebar-breadcrumb-sep {
+  color: var(--color-text-muted);
+}
+
+.sidebar-breadcrumb-range {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-header {

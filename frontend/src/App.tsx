@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Trash2, Check, MessageSquarePlus, MessageSquare, MessagesSquare, RefreshCw, Columns2, AlignJustify,
-  ChevronLeft, ChevronRight, HelpCircle, X, AlertTriangle, Settings, FileText,
+  ChevronLeft, ChevronRight, ArrowUp, ArrowDown, HelpCircle, X, AlertTriangle, Settings,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { Modal } from './components/ui/Modal.js';
@@ -550,27 +550,50 @@ function AppContent({
           files={fileChanges}
           onFileClick={handleFileClick}
           activeFile={currentPath}
+          repoName={metadata.repoName}
+          diffRange={`${metadata.baseRef}..${metadata.headRef}`}
           onAddOverallComment={handleAddOverallComment}
         />
         <div className="app-main">
           <header className="header">
+            {/* Row 1 identifies what you are looking at; the repo and range live
+                in the sidebar, next to the tree you pick files from. */}
             <div className="header-row">
-              <h1>
-                Reviewing <code>{metadata.repoName}</code>:{' '}
-                <code>{metadata.baseRef}..{metadata.headRef}</code>
+              <h1 title={currentPath}>
+                {currentPath ? (
+                  <>
+                    <span className="file-title-dir">{currentPath.slice(0, currentPath.lastIndexOf('/') + 1)}</span>
+                    <span className="file-title-name">{currentPath.slice(currentPath.lastIndexOf('/') + 1)}</span>
+                  </>
+                ) : (
+                  'No changes'
+                )}
               </h1>
-              <div className="toolbar" role="toolbar" aria-label="Review toolbar">
+              <div className="toolbar" role="toolbar" aria-label="Review actions">
+                <div className="toolbar-group">
+                  <Tooltip label="Settings">
+                    <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => setShowSettings(true)} type="button" aria-label="Settings">
+                      <Settings size={15} aria-hidden="true" />
+                    </button>
+                  </Tooltip>
+                  <DiscardButton />
+                  <DoneButton metadata={metadata} onFinish={onFinish} />
+                </div>
+              </div>
+            </div>
+            {/* Row 2 is everything that acts on the file in row 1. */}
+            <div className="header-row header-actions">
+              <div className="toolbar" role="toolbar" aria-label="File toolbar">
                 <div className="toolbar-group" role="group" aria-label="File navigation">
-                  <span className="toolbar-nav-icon" aria-hidden="true"><FileText size={15} /></span>
-                  <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateFile(-1)} type="button" title="Previous file (p)" aria-label="Previous file" disabled={safeIndex <= 0}>
-                    <ChevronLeft size={14} aria-hidden="true" />
+                  <button className="btn toolbar-btn" onClick={() => navigateFile(-1)} type="button" title="Previous file (p)" disabled={safeIndex <= 0}>
+                    <ArrowUp size={14} aria-hidden="true" /> Prev
                   </button>
-                  <span className="file-position" aria-live="polite" title={currentPath}>
+                  <button className="btn toolbar-btn" onClick={() => navigateFile(1)} type="button" title="Next file (n)" disabled={safeIndex >= diffFiles.length - 1}>
+                    <ArrowDown size={14} aria-hidden="true" /> Next
+                  </button>
+                  <span className="file-position" aria-live="polite">
                     {diffFiles.length > 0 ? `${safeIndex + 1} / ${diffFiles.length}` : '0 / 0'}
                   </span>
-                  <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateFile(1)} type="button" title="Next file (n)" aria-label="Next file" disabled={safeIndex >= diffFiles.length - 1}>
-                    <ChevronRight size={14} aria-hidden="true" />
-                  </button>
                 </div>
                 <div className="toolbar-separator" />
                 <div className="toolbar-group">
@@ -594,16 +617,6 @@ function AppContent({
                     onSwitched={onDiffModeSwitched}
                     onError={(message) => toast.error('Failed to switch diff', { description: message })}
                   />
-                </div>
-                <div className="toolbar-separator" />
-                <div className="toolbar-group">
-                  <Tooltip label="Settings">
-                    <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => setShowSettings(true)} type="button" aria-label="Settings">
-                      <Settings size={15} aria-hidden="true" />
-                    </button>
-                  </Tooltip>
-                  <DiscardButton />
-                  <DoneButton metadata={metadata} onFinish={onFinish} />
                 </div>
               </div>
             </div>

@@ -71,13 +71,28 @@ describe('settings modal (browser)', () => {
     expect(toolbarRight).toBeLessThanOrEqual(window.innerWidth + 1);
   });
 
-  it('exposes the file navigation as icon buttons', async () => {
+  it('labels the file navigation in visible text', async () => {
     const screen = render(<App />);
     await waitForApp(screen);
 
-    // Nav labels are now icons + accessible names, not visible text.
-    await expect.element(screen.getByLabelText('Previous file')).toBeInTheDocument();
-    await expect.element(screen.getByLabelText('Next file')).toBeInTheDocument();
+    // Bare chevrons made the primary navigation guesswork; both directions now
+    // carry a word, and the keyboard hint lives in the tooltip.
+    // Anchored: getByRole matches the accessible name as a substring, and the
+    // end-of-diff bar also has a "Previous file" button.
+    await expect.element(screen.getByRole('button', { name: /^Prev$/ })).toBeInTheDocument();
+    await expect.element(screen.getByRole('button', { name: /^Next$/ })).toBeInTheDocument();
+  });
+
+  it('titles the main column with the current file, not the repo', async () => {
+    const screen = render(<App />);
+    await waitForApp(screen);
+
+    // The repo and range moved to the sidebar breadcrumb; the header answers
+    // "which file am I reading".
+    const h1 = document.querySelector('.app-main h1') as HTMLElement;
+    expect(h1.textContent).toBe('src/util/helpers.py');
+    expect(h1.textContent).not.toContain('demo-repo');
+    expect(document.querySelector('.sidebar-breadcrumb')?.textContent).toContain('demo-repo');
   });
 
   it('has no comment-stepping buttons', async () => {
