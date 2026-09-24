@@ -424,9 +424,10 @@ body {
   100% { background-position: -200% 0; }
 }
 
-/* Virtual scroll container */
+/* Virtual scroll container. In the two-panel shell this is a flex child that
+ * fills the remaining height of .app-main (see `.app-main .diff-view-scroll`);
+ * the fallback below only applies to standalone usages. */
 .diff-view-scroll {
-  height: calc(100vh - 100px);
   overflow: auto;
 }
 
@@ -1136,30 +1137,69 @@ body {
   padding: 48px 0;
 }
 
-/* ===== Sidebar & Two-Panel Layout ===== */
+/* ===== Sidebar & Two-Panel Layout =====
+ *
+ * The shell is a single flex column that owns the viewport height:
+ *
+ *   .app-with-sidebar (column, 100dvh)
+ *     .quota-warning?        flex: none
+ *     .app-body (row)        flex: 1, min-height: 0
+ *       .sidebar             full column height
+ *       .app-main (column)   flex: 1, min-height: 0
+ *         .header            flex: none  (stays put while the diff scrolls)
+ *         .overall-comments  flex: none, capped height
+ *         .diff-view-scroll  flex: 1, min-height: 0, the only vertical scroller
+ *     .status-bar            flex: none
+ *
+ * Nothing depends on a hardcoded chrome height, so a wrapped toolbar or a
+ * taller status bar can no longer clip the bottom of the diff.
+ */
 .app-with-sidebar {
   max-width: none;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
 }
 
 .app-with-sidebar .header {
+  /* Scoped to the main column, so it starts where the sidebar ends. */
+  flex: 0 0 auto;
   padding: 12px 24px;
+  margin-bottom: 0;
+}
+
+.app-with-sidebar .quota-warning {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+  border-radius: 0;
 }
 
 .app-body {
   display: flex;
-  height: calc(100vh - 70px);
+  flex: 1;
+  min-height: 0;
 }
 
 .app-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
-  padding: 0 24px 16px;
+}
+
+.app-main .overall-comments {
+  flex: 0 0 auto;
+  padding: 12px 24px;
+  margin-bottom: 0;
 }
 
 .app-main .diff-view-scroll {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 24px;
   overflow: auto;
 }
 
@@ -1448,10 +1488,6 @@ body {
 
   .sidebar-resizer {
     display: none;
-  }
-
-  .app-body {
-    height: calc(100vh - 70px);
   }
 }
 
@@ -1748,12 +1784,11 @@ body {
   gap: 6px;
 }
 
-/* ===== Status Bar ===== */
+/* ===== Status Bar =====
+ * A flex child of the app shell rather than a fixed overlay, so the diff column
+ * is laid out above it instead of underneath it. */
 .status-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  flex: 0 0 auto;
   height: 28px;
   background: var(--color-panel-elevated);
   border-top: 1px solid var(--color-border);
@@ -1763,7 +1798,6 @@ body {
   font-size: 0.75rem;
   color: var(--color-text-subtle);
   gap: 0;
-  z-index: 50;
 }
 
 .status-separator {
@@ -1773,11 +1807,6 @@ body {
 
 .status-categories {
   color: var(--color-text-muted);
-}
-
-/* Adjust app-body to account for status bar */
-.app-with-sidebar .app-body {
-  height: calc(100vh - 70px - 28px);
 }
 
 /* Range selection visual feedback */

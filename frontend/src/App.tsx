@@ -583,82 +583,82 @@ function AppContent({
           <AlertTriangle size={14} aria-hidden="true" /> localStorage is {quota.usagePercent}% full. Consider discarding old reviews.
         </div>
       )}
-      <header className="header">
-        <div className="header-row">
-          <h1>
-            Reviewing <code>{metadata.repoName}</code>:{' '}
-            <code>{metadata.baseRef}..{metadata.headRef}</code>
-          </h1>
-          <div className="toolbar" role="toolbar" aria-label="Review toolbar">
-            <div className="toolbar-group" role="group" aria-label="File navigation">
-              <span className="toolbar-nav-icon" aria-hidden="true"><FileText size={15} /></span>
-              <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateFile(-1)} type="button" title="Previous file (p)" aria-label="Previous file" disabled={safeIndex <= 0}>
-                <ChevronLeft size={14} aria-hidden="true" />
-              </button>
-              <span className="file-position" aria-live="polite" title={currentPath}>
-                {diffFiles.length > 0 ? `${safeIndex + 1} / ${diffFiles.length}` : '0 / 0'}
-              </span>
-              <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateFile(1)} type="button" title="Next file (n)" aria-label="Next file" disabled={safeIndex >= diffFiles.length - 1}>
-                <ChevronRight size={14} aria-hidden="true" />
-              </button>
-              <button
-                className={`btn toolbar-btn btn-review-toggle ${currentReviewed ? 'btn-reviewed' : ''}`}
-                onClick={toggleCurrentReviewed}
-                type="button"
-                disabled={currentPath == null}
-                title={currentReviewed ? 'Mark file as not reviewed' : 'Mark file as reviewed'}
-              >
-                {currentReviewed
-                  ? <><Check size={14} aria-hidden="true" /> Reviewed</>
-                  : <><Circle size={14} aria-hidden="true" /> Review</>}
-              </button>
-            </div>
-            <div className="toolbar-separator" />
-            <div className="toolbar-group" role="group" aria-label="Comment navigation">
-              <span className="toolbar-nav-icon" aria-hidden="true"><MessageSquare size={15} /></span>
-              <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateComment(-1)} type="button" title="Previous comment (k)" aria-label="Previous comment" disabled={sortedComments.length === 0 || isFirstComment}>
-                <ChevronLeft size={14} aria-hidden="true" />
-              </button>
-              <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateComment(1)} type="button" title="Next comment (j)" aria-label="Next comment" disabled={sortedComments.length === 0 || isLastComment}>
-                <ChevronRight size={14} aria-hidden="true" />
-              </button>
-            </div>
-            <div className="toolbar-separator" />
-            <div className="toolbar-group">
-              <button className="btn toolbar-btn" onClick={handleAddOverallComment} type="button" title="Add overall comment (c)">
-                <MessageSquarePlus size={14} aria-hidden="true" /> Comment
-              </button>
-              <button className="btn toolbar-btn" onClick={() => setShowComments(true)} type="button" title="Comment manager" aria-label="Open comment manager">
-                <MessagesSquare size={14} aria-hidden="true" /> Comments{comments.length > 0 ? ` (${comments.length})` : ''}
-              </button>
-              <button className="btn toolbar-btn" onClick={handleRefresh} type="button" title="Refresh diff">
-                <RefreshCw size={14} aria-hidden="true" /> Refresh
-              </button>
-            </div>
-            <div className="toolbar-separator" />
-            <div className="toolbar-group" role="group" aria-label="Diff base">
-              <DiffModeSelector
-                csrfToken={metadata.csrfToken}
-                onSwitched={onDiffModeSwitched}
-                onError={(message) => toast.error('Failed to switch diff', { description: message })}
-              />
-            </div>
-            <div className="toolbar-separator" />
-            <div className="toolbar-group">
-              <Tooltip label="Settings">
-                <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => setShowSettings(true)} type="button" aria-label="Settings">
-                  <Settings size={15} aria-hidden="true" />
-                </button>
-              </Tooltip>
-              <DiscardButton />
-              <DoneButton metadata={metadata} onFinish={onFinish} />
-            </div>
-          </div>
-        </div>
-      </header>
       <div className="app-body">
         <Sidebar files={fileChanges} onFileClick={handleFileClick} activeFile={currentPath} />
         <div className="app-main">
+          <header className="header">
+            <div className="header-row">
+              <h1>
+                Reviewing <code>{metadata.repoName}</code>:{' '}
+                <code>{metadata.baseRef}..{metadata.headRef}</code>
+              </h1>
+              <div className="toolbar" role="toolbar" aria-label="Review toolbar">
+                <div className="toolbar-group" role="group" aria-label="File navigation">
+                  <span className="toolbar-nav-icon" aria-hidden="true"><FileText size={15} /></span>
+                  <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateFile(-1)} type="button" title="Previous file (p)" aria-label="Previous file" disabled={safeIndex <= 0}>
+                    <ChevronLeft size={14} aria-hidden="true" />
+                  </button>
+                  <span className="file-position" aria-live="polite" title={currentPath}>
+                    {diffFiles.length > 0 ? `${safeIndex + 1} / ${diffFiles.length}` : '0 / 0'}
+                  </span>
+                  <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateFile(1)} type="button" title="Next file (n)" aria-label="Next file" disabled={safeIndex >= diffFiles.length - 1}>
+                    <ChevronRight size={14} aria-hidden="true" />
+                  </button>
+                  <button
+                    className={`btn toolbar-btn btn-review-toggle ${currentReviewed ? 'btn-reviewed' : ''}`}
+                    onClick={toggleCurrentReviewed}
+                    type="button"
+                    disabled={currentPath == null}
+                    title={currentReviewed ? 'Mark file as not reviewed' : 'Mark file as reviewed'}
+                  >
+                    {currentReviewed
+                      ? <><Check size={14} aria-hidden="true" /> Reviewed</>
+                      : <><Circle size={14} aria-hidden="true" /> Review</>}
+                  </button>
+                </div>
+                <div className="toolbar-separator" />
+                <div className="toolbar-group" role="group" aria-label="Comment navigation">
+                  <span className="toolbar-nav-icon" aria-hidden="true"><MessageSquare size={15} /></span>
+                  <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateComment(-1)} type="button" title="Previous comment (k)" aria-label="Previous comment" disabled={sortedComments.length === 0 || isFirstComment}>
+                    <ChevronLeft size={14} aria-hidden="true" />
+                  </button>
+                  <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateComment(1)} type="button" title="Next comment (j)" aria-label="Next comment" disabled={sortedComments.length === 0 || isLastComment}>
+                    <ChevronRight size={14} aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="toolbar-separator" />
+                <div className="toolbar-group">
+                  <button className="btn toolbar-btn" onClick={handleAddOverallComment} type="button" title="Add overall comment (c)">
+                    <MessageSquarePlus size={14} aria-hidden="true" /> Comment
+                  </button>
+                  <button className="btn toolbar-btn" onClick={() => setShowComments(true)} type="button" title="Comment manager" aria-label="Open comment manager">
+                    <MessagesSquare size={14} aria-hidden="true" /> Comments{comments.length > 0 ? ` (${comments.length})` : ''}
+                  </button>
+                  <button className="btn toolbar-btn" onClick={handleRefresh} type="button" title="Refresh diff">
+                    <RefreshCw size={14} aria-hidden="true" /> Refresh
+                  </button>
+                </div>
+                <div className="toolbar-separator" />
+                <div className="toolbar-group" role="group" aria-label="Diff base">
+                  <DiffModeSelector
+                    csrfToken={metadata.csrfToken}
+                    onSwitched={onDiffModeSwitched}
+                    onError={(message) => toast.error('Failed to switch diff', { description: message })}
+                  />
+                </div>
+                <div className="toolbar-separator" />
+                <div className="toolbar-group">
+                  <Tooltip label="Settings">
+                    <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => setShowSettings(true)} type="button" aria-label="Settings">
+                      <Settings size={15} aria-hidden="true" />
+                    </button>
+                  </Tooltip>
+                  <DiscardButton />
+                  <DoneButton metadata={metadata} onFinish={onFinish} />
+                </div>
+              </div>
+            </div>
+          </header>
           <OverallComments activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
           <DiffView files={diffFiles} currentIndex={safeIndex} viewType={viewType} themeType={themeMode} syntaxTheme={syntaxTheme} fontSize={fontSize} lineHeight={lineHeight} activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
         </div>
