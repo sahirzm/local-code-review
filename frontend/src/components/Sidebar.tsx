@@ -132,12 +132,15 @@ export function Sidebar({
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Filter files by path"
           />
-          <div className="sidebar-status-filters">
+          {/* Single-select, so it reads as one segmented control rather than
+              five independent buttons. */}
+          <div className="segmented" role="group" aria-label="Filter files by status">
             {statuses.map((s) => (
               <button
                 key={s}
                 type="button"
-                className={`filter-pill ${statusFilter === s ? 'filter-pill-active' : ''}`}
+                className={`segmented-btn ${statusFilter === s ? 'segmented-btn-active' : ''}`}
+                aria-pressed={statusFilter === s}
                 onClick={() => setStatusFilter(s)}
               >
                 {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
@@ -148,6 +151,7 @@ export function Sidebar({
             <button
               type="button"
               className={`filter-pill ${quickFilters.has('has-comments') ? 'filter-pill-active' : ''}`}
+              aria-pressed={quickFilters.has('has-comments')}
               onClick={() => toggleQuickFilter('has-comments')}
             >
               <MessageSquare size={12} aria-hidden="true" /> Has comments
@@ -155,6 +159,7 @@ export function Sidebar({
             <button
               type="button"
               className={`filter-pill ${quickFilters.has('needs-review') ? 'filter-pill-active' : ''}`}
+              aria-pressed={quickFilters.has('needs-review')}
               onClick={() => toggleQuickFilter('needs-review')}
             >
               <Circle size={12} aria-hidden="true" /> Needs review
