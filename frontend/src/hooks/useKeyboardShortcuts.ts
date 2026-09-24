@@ -3,8 +3,6 @@ import { useEffect, useCallback, useRef } from 'react';
 interface ShortcutActions {
   nextFile: () => void;
   prevFile: () => void;
-  nextComment: () => void;
-  prevComment: () => void;
   addComment: () => void;
   toggleReviewed: () => void;
   toggleViewMode: () => void;
@@ -40,12 +38,6 @@ export function useKeyboardShortcuts(actions: ShortcutActions): void {
       case 'p':
         actionsRef.current.prevFile();
         break;
-      case 'j':
-        actionsRef.current.nextComment();
-        break;
-      case 'k':
-        actionsRef.current.prevComment();
-        break;
       case 'c':
         actionsRef.current.addComment();
         break;
@@ -72,8 +64,6 @@ export function useKeyboardShortcuts(actions: ShortcutActions): void {
 export const SHORTCUT_LIST: ReadonlyArray<{ key: string; description: string }> = [
   { key: 'n', description: 'Next file' },
   { key: 'p', description: 'Previous file' },
-  { key: 'j', description: 'Next comment' },
-  { key: 'k', description: 'Previous comment' },
   { key: 'c', description: 'Add overall comment' },
   { key: 'r', description: 'Mark current file reviewed / not reviewed' },
   { key: 'd', description: 'Toggle split/unified view' },

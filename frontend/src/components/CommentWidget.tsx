@@ -8,7 +8,6 @@ import { useReviewStore } from '../hooks/useReviewStore.js';
 interface CommentWidgetProps {
   comment: Comment;
   isActive?: boolean;
-  scrollDirection?: 'forward' | 'backward' | null;
 }
 
 function formatTime(iso: string): string {
@@ -16,7 +15,7 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export function CommentWidget({ comment, isActive, scrollDirection }: CommentWidgetProps): React.JSX.Element {
+export function CommentWidget({ comment, isActive }: CommentWidgetProps): React.JSX.Element {
   const [editing, setEditing] = useState(false);
   const { editComment, deleteComment, setCommentStatus } = useReviewStore();
   const widgetRef = useRef<HTMLDivElement>(null);
@@ -27,23 +26,14 @@ export function CommentWidget({ comment, isActive, scrollDirection }: CommentWid
         const el = widgetRef.current;
         if (!el) return;
         const rect = el.getBoundingClientRect();
-        const OFFSET = 60;
-        const BACK_OFFSET = 200; // ~10 lines of context above
-        if (scrollDirection === 'forward' && rect.bottom > window.innerHeight - OFFSET) {
-          // Scrolling forward: ensure bottom of comment is visible with offset
-          el.scrollIntoView({ block: 'end' });
-          el.closest('.diff-view-scroll')?.scrollBy(0, OFFSET);
-        } else if (scrollDirection === 'backward' && rect.top < BACK_OFFSET) {
-          // Scrolling backward: show ~10 lines of context above the comment
-          el.scrollIntoView({ block: 'start' });
-          el.closest('.diff-view-scroll')?.scrollBy(0, -BACK_OFFSET);
-        } else if (rect.bottom > window.innerHeight || rect.top < 0) {
-          // Fully off-screen: just bring into view
-          el.scrollIntoView({ block: 'nearest' });
+        // Only scroll when the comment is not already fully on screen, so
+        // jumping to something you can already see does not move the page.
+        if (rect.top < 0 || rect.bottom > window.innerHeight) {
+          el.scrollIntoView({ block: 'center' });
         }
       });
     }
-  }, [isActive, scrollDirection]);
+  }, [isActive]);
 
   if (editing) {
     return (

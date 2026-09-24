@@ -71,14 +71,23 @@ describe('settings modal (browser)', () => {
     expect(toolbarRight).toBeLessThanOrEqual(window.innerWidth + 1);
   });
 
-  it('exposes the file and comment navigation as icon buttons', async () => {
+  it('exposes the file navigation as icon buttons', async () => {
     const screen = render(<App />);
     await waitForApp(screen);
 
     // Nav labels are now icons + accessible names, not visible text.
     await expect.element(screen.getByLabelText('Previous file')).toBeInTheDocument();
     await expect.element(screen.getByLabelText('Next file')).toBeInTheDocument();
-    await expect.element(screen.getByLabelText('Previous comment')).toBeInTheDocument();
-    await expect.element(screen.getByLabelText('Next comment')).toBeInTheDocument();
+  });
+
+  it('has no comment-stepping buttons', async () => {
+    const screen = render(<App />);
+    await waitForApp(screen);
+
+    // Sequential j/k comment stepping was removed; the comment manager is the
+    // only way to jump to a specific comment.
+    expect(document.querySelector('[aria-label="Next comment"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Previous comment"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Comment navigation"]')).toBeNull();
   });
 });

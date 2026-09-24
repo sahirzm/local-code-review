@@ -24,7 +24,6 @@ interface DiffViewProps {
   /** Diff line-height ratio; also part of the layout remount key. */
   lineHeight: number;
   activeCommentId?: string | null;
-  scrollDirection?: 'forward' | 'backward' | null;
   /** Rendered after the diff, inside the scroller: the end-of-file actions. */
   footer?: React.ReactNode;
 }
@@ -38,7 +37,6 @@ export function DiffView({
   fontSize,
   lineHeight,
   activeCommentId,
-  scrollDirection,
   footer,
 }: DiffViewProps): React.JSX.Element {
   if (files === null) {
@@ -80,7 +78,6 @@ export function DiffView({
         themeType={themeType}
         syntaxTheme={syntaxTheme}
         activeCommentId={activeCommentId}
-        scrollDirection={scrollDirection}
       />
       {footer}
     </div>

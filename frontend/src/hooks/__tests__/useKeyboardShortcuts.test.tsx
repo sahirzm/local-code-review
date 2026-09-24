@@ -8,8 +8,6 @@ function makeActions(): Record<keyof Actions, ReturnType<typeof vi.fn>> {
   return {
     nextFile: vi.fn(),
     prevFile: vi.fn(),
-    nextComment: vi.fn(),
-    prevComment: vi.fn(),
     addComment: vi.fn(),
     toggleReviewed: vi.fn(),
     toggleViewMode: vi.fn(),
@@ -38,8 +36,6 @@ describe('useKeyboardShortcuts', () => {
     const cases: Array<[string, keyof Actions]> = [
       ['n', 'nextFile'],
       ['p', 'prevFile'],
-      ['j', 'nextComment'],
-      ['k', 'prevComment'],
       ['c', 'addComment'],
       ['r', 'toggleReviewed'],
       ['d', 'toggleViewMode'],

@@ -426,9 +426,7 @@ function AppContent({
   const [showSettings, setShowSettings] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showRefreshWarn, setShowRefreshWarn] = useState(false);
-  const [commentIdx, setCommentIdx] = useState(-1);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
-  const [scrollDirection, setScrollDirection] = useState<'forward' | 'backward' | null>(null);
   // The diff surface shows one file at a time; this is the selected file.
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -497,59 +495,15 @@ function AppContent({
     goToFile(filePaths.indexOf(nextPath));
   }, [currentPath, filePaths, safeIndex, markFileReviewed, isFileReviewed, goToFile]);
 
-  // Sorted comments for navigation — matches visual order on page
-  const sortedComments = useMemo(() => {
-    const fileOrder = new Map<string, number>();
-    filePaths.forEach((p, i) => fileOrder.set(p, i));
-
-    return [...comments].sort((a, b) => {
-      // Overall comments first
-      if (a.type === 'overall' && b.type !== 'overall') return -1;
-      if (a.type !== 'overall' && b.type === 'overall') return 1;
-      // Then by file position in diff view
-      const aIdx = fileOrder.get(a.filePath ?? '') ?? Infinity;
-      const bIdx = fileOrder.get(b.filePath ?? '') ?? Infinity;
-      if (aIdx !== bIdx) return aIdx - bIdx;
-      // File-level comments before line comments in same file
-      if (a.type === 'file' && b.type !== 'file') return -1;
-      if (a.type !== 'file' && b.type === 'file') return 1;
-      // Then by start line
-      return (a.startLine ?? 0) - (b.startLine ?? 0);
-    });
-  }, [comments, filePaths]);
-
-  const isFirstComment = commentIdx <= 0;
-  const isLastComment = commentIdx >= sortedComments.length - 1;
-
-  const navigateComment = useCallback((direction: 1 | -1) => {
-    if (sortedComments.length === 0) return;
-    const next = Math.max(0, Math.min(sortedComments.length - 1, commentIdx + direction));
-    setCommentIdx(next);
-    const c = sortedComments[next];
-    setActiveCommentId(c.id);
-    setScrollDirection(direction === 1 ? 'forward' : 'backward');
-    // Switch to the file that owns the comment; CommentWidget scrolls it into
-    // view once its file is shown.
-    if (c.type === 'overall') {
-      scrollTop();
-    } else if (c.filePath) {
-      const idx = filePaths.indexOf(c.filePath);
-      if (idx >= 0) setCurrentIndex(idx);
-    }
-  }, [sortedComments, commentIdx, filePaths, scrollTop]);
-
   const jumpToComment = useCallback((c: Comment) => {
     setActiveCommentId(c.id);
-    setScrollDirection('forward');
-    const idx = sortedComments.findIndex((x) => x.id === c.id);
-    if (idx >= 0) setCommentIdx(idx);
     if (c.type === 'overall') {
       scrollTop();
     } else if (c.filePath) {
       const fileIdx = filePaths.indexOf(c.filePath);
       if (fileIdx >= 0) setCurrentIndex(fileIdx);
     }
-  }, [sortedComments, filePaths, scrollTop]);
+  }, [filePaths, scrollTop]);
 
   const handleAddOverallComment = useCallback(() => {
     // Scroll to top where overall comments section is
@@ -562,8 +516,6 @@ function AppContent({
   useKeyboardShortcuts({
     nextFile: () => navigateFile(1),
     prevFile: () => navigateFile(-1),
-    nextComment: () => navigateComment(1),
-    prevComment: () => navigateComment(-1),
     addComment: handleAddOverallComment,
     toggleReviewed: toggleCurrentReviewed,
     toggleViewMode: handleToggleView,
@@ -619,16 +571,6 @@ function AppContent({
                   </button>
                 </div>
                 <div className="toolbar-separator" />
-                <div className="toolbar-group" role="group" aria-label="Comment navigation">
-                  <span className="toolbar-nav-icon" aria-hidden="true"><MessageSquare size={15} /></span>
-                  <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateComment(-1)} type="button" title="Previous comment (k)" aria-label="Previous comment" disabled={sortedComments.length === 0 || isFirstComment}>
-                    <ChevronLeft size={14} aria-hidden="true" />
-                  </button>
-                  <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateComment(1)} type="button" title="Next comment (j)" aria-label="Next comment" disabled={sortedComments.length === 0 || isLastComment}>
-                    <ChevronRight size={14} aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="toolbar-separator" />
                 <div className="toolbar-group">
                   <button className="btn toolbar-btn" onClick={handleAddOverallComment} type="button" title="Add overall comment (c)">
                     <MessageSquarePlus size={14} aria-hidden="true" /> Comment
@@ -664,7 +606,7 @@ function AppContent({
               </div>
             </div>
           </header>
-          <OverallComments activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
+          <OverallComments activeCommentId={activeCommentId} />
           <DiffView
             files={diffFiles}
             currentIndex={safeIndex}
@@ -674,7 +616,6 @@ function AppContent({
             fontSize={fontSize}
             lineHeight={lineHeight}
             activeCommentId={activeCommentId}
-            scrollDirection={scrollDirection}
             footer={
               <div className="diff-end-bar">
                 <button

@@ -6,10 +6,9 @@ import { CommentWidget } from './CommentWidget.js';
 
 interface OverallCommentsProps {
   activeCommentId?: string | null;
-  scrollDirection?: 'forward' | 'backward' | null;
 }
 
-export function OverallComments({ activeCommentId, scrollDirection }: OverallCommentsProps): React.JSX.Element {
+export function OverallComments({ activeCommentId }: OverallCommentsProps): React.JSX.Element {
   const [showForm, setShowForm] = useState(false);
   const { comments, addComment } = useReviewStore();
 
@@ -41,7 +40,7 @@ export function OverallComments({ activeCommentId, scrollDirection }: OverallCom
         />
       )}
       {overallComments.map((c) => (
-        <CommentWidget key={c.id} comment={c} isActive={c.id === activeCommentId} scrollDirection={c.id === activeCommentId ? scrollDirection : null} />
+        <CommentWidget key={c.id} comment={c} isActive={c.id === activeCommentId} />
       ))}
     </section>
   );

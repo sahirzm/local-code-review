@@ -24,7 +24,6 @@ interface FileDiffProps {
   themeType: 'dark' | 'light';
   syntaxTheme: ShikiThemePair;
   activeCommentId?: string | null;
-  scrollDirection?: 'forward' | 'backward' | null;
 }
 
 interface ActiveForm {
@@ -43,7 +42,6 @@ export function FileDiff({
   themeType,
   syntaxTheme,
   activeCommentId,
-  scrollDirection,
 }: FileDiffProps): React.JSX.Element {
   const isLargeDefault = file.isLarge;
   const { addComment, getCommentsForFile, isFileReviewed, markFileReviewed, unmarkFileReviewed } = useReviewStore();
@@ -126,7 +124,6 @@ export function FileDiff({
               key={c.id}
               comment={c}
               isActive={c.id === activeCommentId}
-              scrollDirection={c.id === activeCommentId ? scrollDirection : null}
             />
           ))}
           {isFormLine && (
@@ -154,7 +151,7 @@ export function FileDiff({
         </div>
       );
     },
-    [activeForm, activeCommentId, scrollDirection, addComment, filePath],
+    [activeForm, activeCommentId, addComment, filePath],
   );
 
   if (file.isBinary) {
@@ -182,7 +179,7 @@ export function FileDiff({
         <CommentForm mode="create" onSubmit={handleFileComment} onCancel={() => setShowFileForm(false)} />
       )}
       {fileCommentsOfType.map((c) => (
-        <CommentWidget key={c.id} comment={c} isActive={c.id === activeCommentId} scrollDirection={c.id === activeCommentId ? scrollDirection : null} />
+        <CommentWidget key={c.id} comment={c} isActive={c.id === activeCommentId} />
       ))}
       {collapsed ? (
         <div className="collapsed-message">
