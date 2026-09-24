@@ -148,6 +148,15 @@ export type UiFontId =
   | 'segoe-ui'
   | 'helvetica';
 
+/** Context lines shown around each hunk; 'full' means the whole file. */
+export type DiffContextLevel = 5 | 10 | 20 | 50 | 'full';
+
+/**
+ * Everything that should outlive a single review, in one blob under one key.
+ * Anything stored under its own `local-review:*` key is deleted by
+ * `cleanExpiredSessions()`, which treats every other key in that namespace as
+ * an expiring review session.
+ */
 export interface UserPreferences {
   theme: ThemeId;
   /** Diff text size in px. */
@@ -158,6 +167,10 @@ export interface UserPreferences {
   codeFont: CodeFontId;
   /** Sans-serif font used for the app chrome. */
   uiFont: UiFontId;
+  /** Context lines requested from the diff endpoint. */
+  contextLevel: DiffContextLevel;
+  /** File-tree sidebar width in px. */
+  sidebarWidth: number;
 }
 
 export interface FileTreeNode {

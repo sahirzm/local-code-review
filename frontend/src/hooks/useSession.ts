@@ -3,6 +3,16 @@ import type { ReviewSession } from '../shared/types.js';
 const SESSION_PREFIX = 'local-review:';
 const EXPIRY_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
+/**
+ * Matches only keys produced by `getSessionKey()`: the prefix, the 8-hex repo
+ * path hash, then the commit range. The sweep below used to take the whole
+ * `local-review:` namespace and spare one hardcoded exception, so every other
+ * preference key in that namespace was destroyed on mount as an "expired
+ * session" — which is how the diff-context and sidebar-width settings kept
+ * resetting. Anything that is not shaped like a session is now left alone.
+ */
+const SESSION_KEY_PATTERN = /^local-review:[0-9a-f]{8}:/;
+
 export function hashRepoPath(repoPath: string): string {
   let hash = 0;
   for (let i = 0; i < repoPath.length; i++) {
@@ -71,7 +81,7 @@ export function cleanExpiredSessions(): void {
   const now = Date.now();
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const key = localStorage.key(i);
-    if (!key?.startsWith(SESSION_PREFIX) || key === `${SESSION_PREFIX.slice(0, -1)}:preferences`) continue;
+    if (key === null || !SESSION_KEY_PATTERN.test(key)) continue;
     try {
       const data = JSON.parse(localStorage.getItem(key)!) as { lastAccessedAt?: string };
       if (!data.lastAccessedAt || now - new Date(data.lastAccessedAt).getTime() > EXPIRY_MS) {

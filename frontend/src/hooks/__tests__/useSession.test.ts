@@ -121,9 +121,11 @@ describe('cleanExpiredSessions', () => {
     localStorage.clear();
   });
 
+  // Keys are shaped like getSessionKey() output: prefix, 8-hex repo hash,
+  // commit range. cleanExpiredSessions only touches that shape.
   it('removes expired sessions', () => {
-    const expiredKey = 'local-review:x:expired';
-    const freshKey = 'local-review:x:fresh';
+    const expiredKey = 'local-review:12345678:expired';
+    const freshKey = 'local-review:12345678:fresh';
 
     localStorage.setItem(
       expiredKey,
@@ -140,7 +142,7 @@ describe('cleanExpiredSessions', () => {
   });
 
   it('removes entries with unparseable data', () => {
-    const badKey = 'local-review:x:corrupt';
+    const badKey = 'local-review:12345678:corrupt';
     localStorage.setItem(badKey, 'not json');
     cleanExpiredSessions();
     expect(localStorage.getItem(badKey)).toBeNull();
@@ -157,5 +159,21 @@ describe('cleanExpiredSessions', () => {
     localStorage.setItem(prefKey, JSON.stringify({ theme: 'dark' }));
     cleanExpiredSessions();
     expect(localStorage.getItem(prefKey)).not.toBeNull();
+  });
+
+  // The sweep used to take the entire `local-review:` namespace with a single
+  // hardcoded exception for `:preferences`, so any other preference key was
+  // deleted on mount as an "expired session".
+  it('leaves other local-review keys that are not sessions alone', () => {
+    const keys = [
+      'local-review:diff-context',
+      'local-review:sidebar-width',
+      'local-review:some-future-setting',
+    ];
+    for (const key of keys) localStorage.setItem(key, 'value');
+
+    cleanExpiredSessions();
+
+    for (const key of keys) expect(localStorage.getItem(key)).toBe('value');
   });
 });

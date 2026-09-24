@@ -6,7 +6,7 @@ import {
 import { Toaster, toast } from 'sonner';
 import { Modal } from './components/ui/Modal.js';
 import { TooltipProvider, Tooltip } from './components/ui/Tooltip.js';
-import type { ReviewMetadata, DiffResponse, ParsedFileDiff, FinishResponse, FileChange, Comment, ThemeId, CodeFontId, UiFontId } from './shared/types.js';
+import type { ReviewMetadata, DiffResponse, ParsedFileDiff, FinishResponse, FileChange, Comment, ThemeId, CodeFontId, UiFontId, DiffContextLevel } from './shared/types.js';
 import { THEMES } from './themes.js';
 import {
   CODE_FONTS, UI_FONTS,
@@ -32,6 +32,7 @@ import {
   MAX_FONT_SIZE,
   MIN_LINE_HEIGHT,
   MAX_LINE_HEIGHT,
+  CONTEXT_LEVELS,
 } from './utils/preferences.js';
 import { cleanExpiredSessions } from './hooks/useSession.js';
 import { useQuotaMonitor } from './hooks/useQuotaMonitor.js';
@@ -42,21 +43,8 @@ type LoadState = 'loading' | 'ready' | 'error';
 type AppView = 'review' | 'summary';
 type ViewType = PierreViewType;
 
-/** Diff context-line levels offered in the toolbar; 'full' maps to whole-file. */
-const CONTEXT_LEVELS = [5, 10, 20, 50, 'full'] as const;
-type ContextLevel = (typeof CONTEXT_LEVELS)[number];
-const DEFAULT_CONTEXT: ContextLevel = 5;
-const CONTEXT_STORAGE_KEY = 'local-review:diff-context';
-
-function loadContextLevel(): ContextLevel {
-  try {
-    const raw = localStorage.getItem(CONTEXT_STORAGE_KEY);
-    if (raw === 'full') return 'full';
-    const n = Number(raw);
-    if (CONTEXT_LEVELS.includes(n as ContextLevel)) return n as ContextLevel;
-  } catch { /* ignore */ }
-  return DEFAULT_CONTEXT;
-}
+/** Levels and persistence live in utils/preferences with the other prefs. */
+type ContextLevel = DiffContextLevel;
 
 
 // Match the sidebar tree: directories before files at every level, with names
@@ -779,7 +767,7 @@ export function App(): React.JSX.Element {
   const [lineHeight, setLineHeight] = useState<number>(initialPrefs.lineHeight);
   const [codeFont, setCodeFont] = useState<CodeFontId>(initialPrefs.codeFont);
   const [uiFont, setUiFont] = useState<UiFontId>(initialPrefs.uiFont);
-  const [contextLevel, setContextLevel] = useState<ContextLevel>(loadContextLevel);
+  const [contextLevel, setContextLevel] = useState<ContextLevel>(initialPrefs.contextLevel);
   const [view, setView] = useState<AppView>('review');
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
 
@@ -804,8 +792,19 @@ export function App(): React.JSX.Element {
     root.style.setProperty('--font-mono', codeStack);
     root.style.setProperty('--diffs-font-family', codeStack);
     root.style.setProperty('--font-sans', resolveUiFontStack(uiFont));
-    savePreferences({ theme, fontSize, lineHeight, codeFont, uiFont });
-  }, [theme, fontSize, lineHeight, codeFont, uiFont]);
+    // One write for every display preference, including the ones the toolbar
+     // owns, so none of them can be stored under a key that
+     // cleanExpiredSessions() mistakes for a stale review session.
+    savePreferences({
+      theme,
+      fontSize,
+      lineHeight,
+      codeFont,
+      uiFont,
+      contextLevel,
+      sidebarWidth: loadPreferences().sidebarWidth,
+    });
+  }, [theme, fontSize, lineHeight, codeFont, uiFont, contextLevel]);
 
   const fetchDiff = useCallback((level: ContextLevel): Promise<DiffResponse> => {
     return fetch(`/api/v1/diff?context=${level}`, { cache: 'no-store' }).then((r) => {
@@ -860,10 +859,8 @@ export function App(): React.JSX.Element {
   }, []);
 
   const handleSelectContext = useCallback((level: ContextLevel) => {
+    // Persisted by the preferences effect above, which depends on contextLevel.
     setContextLevel(level);
-    try {
-      localStorage.setItem(CONTEXT_STORAGE_KEY, String(level));
-    } catch { /* ignore */ }
     fetchDiff(level)
       .then((diff) => {
         setDiffFiles(sortDiffFiles(diff.files ?? []));
