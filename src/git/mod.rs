@@ -239,7 +239,7 @@ impl GitModule {
         diff.find_similar(Some(&mut find_opts))?;
 
         let mut files = Vec::new();
-        for delta in diff.deltas() {
+        for (idx, delta) in diff.deltas().enumerate() {
             let status = match delta.status() {
                 git2::Delta::Added => FileStatus::Added,
                 git2::Delta::Deleted => FileStatus::Deleted,
@@ -264,12 +264,24 @@ impl GitModule {
                 None
             };
 
+            // Per-delta line stats. Without these the sidebar shows "+0 -0"
+            // for every file in a commit range, since this list — not the
+            // parsed text diff — is what feeds the file tree in that mode.
+            // Binary deltas have no patch, which is a legitimate 0/0.
+            let (additions, deletions) = match git2::Patch::from_diff(&diff, idx) {
+                Ok(Some(patch)) => {
+                    let (_context, added, removed) = patch.line_stats()?;
+                    (added as u32, removed as u32)
+                }
+                _ => (0, 0),
+            };
+
             files.push(FileChange {
                 path,
                 old_path,
                 status,
-                additions: 0,
-                deletions: 0,
+                additions,
+                deletions,
             });
         }
 
@@ -372,6 +384,27 @@ mod tests {
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].additions, 2);
         assert_eq!(parsed[0].deletions, 1);
+    }
+
+    #[test]
+    fn file_list_carries_per_file_line_counts() {
+        // Regression test: get_file_list hardcoded additions/deletions to 0, and
+        // it is this list — not the parsed text diff — that feeds the sidebar
+        // file tree in `commits` mode, so every file showed "+0 -0".
+        let fx = fixture();
+        let base = fx.base.clone();
+
+        fs::write(fx.path.join("a.txt"), "one\nTWO\nthree\nfour\n").unwrap();
+        fs::write(fx.path.join("b.txt"), "new\nfile\n").unwrap();
+        let head = commit_all(&git2::Repository::open(&fx.path).unwrap(), "change").to_string();
+
+        let files = fx.git.get_file_list(&base, &head).unwrap();
+
+        let a = files.iter().find(|f| f.path == "a.txt").unwrap();
+        assert_eq!((a.additions, a.deletions), (2, 1), "a.txt line counts");
+
+        let b = files.iter().find(|f| f.path == "b.txt").unwrap();
+        assert_eq!((b.additions, b.deletions), (2, 0), "added file counts");
     }
 
     #[test]
