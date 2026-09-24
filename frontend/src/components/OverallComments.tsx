@@ -18,7 +18,12 @@ export function OverallComments({ activeCommentId, scrollDirection }: OverallCom
   return (
     <section className="overall-comments" aria-label="Overall comments">
       <div className="overall-comments-header">
-        <h2>Overall Comments</h2>
+        <h2>
+          Overall Comments
+          {overallComments.length > 0 && (
+            <span className="overall-comments-count"> ({overallComments.length})</span>
+          )}
+        </h2>
         {!showForm && (
           <button type="button" className="btn btn-add" onClick={() => setShowForm(true)}>
             + Add overall comment

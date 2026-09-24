@@ -809,7 +809,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 8px;
+}
+
+/* Nothing below it (no form, no comments) — don't reserve the gap. */
+.overall-comments-header:last-child {
+  margin-bottom: 0;
+}
+
+.overall-comments-count {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .overall-comments-header h2 {
@@ -1190,9 +1202,15 @@ body {
   overflow: hidden;
 }
 
+/* Overall comments sit above the diff in the same column, so an unbounded
+ * list would squeeze the diff (and clip its bottom). Cap the section and give
+ * it its own scroller instead; the diff keeps at least ~2/3 of the column. */
 .app-main .overall-comments {
-  flex: 0 0 auto;
-  padding: 12px 24px;
+  flex: 0 1 auto;
+  max-height: 35dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 24px;
   margin-bottom: 0;
 }
 
