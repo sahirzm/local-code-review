@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { PanelLeftClose, PanelLeftOpen, ChevronRight, ChevronDown, MessageSquare, Circle, Check } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, ChevronRight, ChevronDown, MessageSquare, MessageSquarePlus, Circle, Check } from 'lucide-react';
 import type { FileChange, FileTreeNode } from '../shared/types.js';
 import { buildFileTree } from '../utils/build-file-tree.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
@@ -13,9 +13,11 @@ interface SidebarProps {
   files: FileChange[];
   onFileClick: (filePath: string) => void;
   activeFile?: string;
+  /** Opens the review-wide comment composer. */
+  onAddOverallComment: () => void;
 }
 
-export function Sidebar({ files, onFileClick, activeFile }: SidebarProps): React.JSX.Element {
+export function Sidebar({ files, onFileClick, activeFile, onAddOverallComment }: SidebarProps): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -31,6 +33,11 @@ export function Sidebar({ files, onFileClick, activeFile }: SidebarProps): React
     }
     return map;
   }, [comments]);
+
+  const overallCount = useMemo(
+    () => comments.filter((c) => c.type === 'overall').length,
+    [comments],
+  );
 
   const filteredFiles = useMemo(() => {
     const reviewedSet = new Set(reviewedFiles);
@@ -147,6 +154,18 @@ export function Sidebar({ files, onFileClick, activeFile }: SidebarProps): React
             <FileTree nodes={tree} onFileClick={onFileClick} activeFile={activeFile} depth={0} />
           )}
         </nav>
+
+        <div className="sidebar-footer">
+          <button type="button" className="btn sidebar-overall-btn" onClick={onAddOverallComment}>
+            <MessageSquarePlus size={13} aria-hidden="true" />
+            Overall comment
+            {overallCount > 0 && (
+              <span className="sidebar-overall-count" aria-label={`${overallCount} so far`}>
+                {overallCount}
+              </span>
+            )}
+          </button>
+        </div>
       </aside>
       <div
         className={`sidebar-resizer${resizing ? ' resizing' : ''}`}

@@ -18,7 +18,7 @@ import type { PierreViewType } from './components/FileDiff.js';
 import { DiffWorkerPoolProvider, useWorkerPoolThemeSync } from './components/diff/workerPool.js';
 import { resolveShikiTheme } from './components/diff/shikiTheme.js';
 import { Sidebar } from './components/Sidebar.js';
-import { OverallComments } from './components/OverallComments.js';
+import { OverallCommentModal } from './components/OverallCommentModal.js';
 import { CommentManager } from './components/CommentManager.js';
 import { DiffModeSelector } from './components/DiffModeSelector.js';
 import { SummaryPage } from './components/SummaryPage.js';
@@ -425,6 +425,7 @@ function AppContent({
   const [showHelp, setShowHelp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showOverallForm, setShowOverallForm] = useState(false);
   const [showRefreshWarn, setShowRefreshWarn] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   // The diff surface shows one file at a time; this is the selected file.
@@ -497,21 +498,17 @@ function AppContent({
 
   const jumpToComment = useCallback((c: Comment) => {
     setActiveCommentId(c.id);
-    if (c.type === 'overall') {
-      scrollTop();
-    } else if (c.filePath) {
+    // Overall comments are not anchored anywhere in the diff, so there is
+    // nothing to jump to; the manager that invoked this already shows them.
+    if (c.type !== 'overall' && c.filePath) {
       const fileIdx = filePaths.indexOf(c.filePath);
       if (fileIdx >= 0) setCurrentIndex(fileIdx);
     }
-  }, [filePaths, scrollTop]);
+  }, [filePaths]);
 
   const handleAddOverallComment = useCallback(() => {
-    // Scroll to top where overall comments section is
-    scrollTop();
-    // Click the add button if it exists
-    const btn = document.querySelector('.overall-comments .btn-add') as HTMLButtonElement | null;
-    btn?.click();
-  }, [scrollTop]);
+    setShowOverallForm(true);
+  }, []);
 
   useKeyboardShortcuts({
     nextFile: () => navigateFile(1),
@@ -549,7 +546,12 @@ function AppContent({
         </div>
       )}
       <div className="app-body">
-        <Sidebar files={fileChanges} onFileClick={handleFileClick} activeFile={currentPath} />
+        <Sidebar
+          files={fileChanges}
+          onFileClick={handleFileClick}
+          activeFile={currentPath}
+          onAddOverallComment={handleAddOverallComment}
+        />
         <div className="app-main">
           <header className="header">
             <div className="header-row">
@@ -606,7 +608,6 @@ function AppContent({
               </div>
             </div>
           </header>
-          <OverallComments activeCommentId={activeCommentId} />
           <DiffView
             files={diffFiles}
             currentIndex={safeIndex}
@@ -656,6 +657,7 @@ function AppContent({
         </div>
       </div>
       <StatusBar totalFiles={fileChanges.length} />
+      <OverallCommentModal open={showOverallForm} onOpenChange={setShowOverallForm} />
       <CommentManager
         open={showComments}
         onOpenChange={setShowComments}

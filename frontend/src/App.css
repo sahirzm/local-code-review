@@ -68,6 +68,7 @@ html {
    * from --color-panel-hover (they were literally the same value in 4 of the
    * 6 themes, making selected rows invisible). */
   --color-selection-bg: color-mix(in srgb, var(--color-accent) 30%, var(--color-bg));
+  --status-bar-height: 28px;
   --color-selection-text: color-mix(in srgb, var(--color-accent), var(--shade-contrast) 45%);
 
   /* Derived translucent fills for badges, active pills, and count chips */
@@ -893,35 +894,17 @@ body {
   font-size: 0.9em;
 }
 
-/* Overall Comments */
-.overall-comments {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.overall-comments-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-/* Nothing below it (no form, no comments) — don't reserve the gap. */
-.overall-comments-header:last-child {
-  margin-bottom: 0;
-}
-
+/* Overall comments live in a modal off the sidebar, not in the diff column. */
 .overall-comments-count {
   font-weight: 400;
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.overall-comments-header h2 {
-  font-size: var(--text-md);
-  color: var(--color-text-heading);
+.overall-comment-hint {
+  margin: -8px 0 14px;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 /* Gutter click highlight */
@@ -1268,7 +1251,6 @@ body {
  *       .sidebar             full column height
  *       .app-main (column)   flex: 1, min-height: 0
  *         .header            flex: none  (stays put while the diff scrolls)
- *         .overall-comments  flex: none, capped height
  *         .diff-view-scroll  flex: 1, min-height: 0, the only vertical scroller
  *     .status-bar            flex: none
  *
@@ -1309,18 +1291,6 @@ body {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-}
-
-/* Overall comments sit above the diff in the same column, so an unbounded
- * list would squeeze the diff (and clip its bottom). Cap the section and give
- * it its own scroller instead; the diff keeps at least ~2/3 of the column. */
-.app-main .overall-comments {
-  flex: 0 1 auto;
-  max-height: 35dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 10px 24px;
-  margin-bottom: 0;
 }
 
 .app-main .diff-view-scroll {
@@ -1461,8 +1431,33 @@ body {
 }
 
 /* Sidebar Tree */
+.sidebar-footer {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.sidebar-overall-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.sidebar-overall-count {
+  margin-left: auto;
+  background: var(--fill-accent);
+  color: var(--color-accent);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
 .sidebar-tree {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 4px 0;
@@ -1622,13 +1617,15 @@ body {
   flex-shrink: 0;
 }
 
-/* Responsive: hide sidebar on narrow viewports */
+/* Responsive: the sidebar becomes an overlay drawer on narrow viewports */
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
     left: 0;
     top: 0;
-    bottom: 0;
+    /* Stops above the status bar rather than sliding under it, which would
+     * clip whatever the sidebar pins to its own bottom. */
+    bottom: var(--status-bar-height);
     z-index: 50;
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.5);
   }
@@ -1941,7 +1938,7 @@ body {
  * is laid out above it instead of underneath it. */
 .status-bar {
   flex: 0 0 auto;
-  height: 28px;
+  height: var(--status-bar-height);
   background: var(--color-panel-elevated);
   border-top: 1px solid var(--color-border);
   display: flex;
