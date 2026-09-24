@@ -76,6 +76,32 @@ describe('buildFileTree', () => {
     expect(tree[0].commentCount).toBe(0);
   });
 
+  it('rolls descendant comment counts up into directories', () => {
+    // A collapsed directory has to be able to show that there is something
+    // inside it, otherwise the indicator disappears with the folder.
+    const counts = new Map([
+      ['src/a/one.ts', 2],
+      ['src/a/two.ts', 1],
+      ['src/b/three.ts', 4],
+    ]);
+    const tree = buildFileTree(
+      [file('src/a/one.ts'), file('src/a/two.ts'), file('src/b/three.ts')],
+      [],
+      counts,
+    );
+    const src = tree.find((n) => n.name === 'src')!;
+    expect(src.commentCount).toBe(7);
+    const a = src.children!.find((n) => n.name === 'a')!;
+    const b = src.children!.find((n) => n.name === 'b')!;
+    expect(a.commentCount).toBe(3);
+    expect(b.commentCount).toBe(4);
+  });
+
+  it('leaves directory comment counts at 0 when nothing inside is commented', () => {
+    const tree = buildFileTree([file('src/a/one.ts')], [], new Map());
+    expect(tree[0].commentCount).toBe(0);
+  });
+
   it('preserves file status on leaf nodes', () => {
     const tree = buildFileTree([file('added.ts', 'added'), file('del.ts', 'deleted')], [], new Map());
     expect(tree[0]).toMatchObject({ name: 'added.ts', status: 'added' });

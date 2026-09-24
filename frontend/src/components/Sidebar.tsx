@@ -199,6 +199,16 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
         >
           <span className="tree-icon" aria-hidden="true">{expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
           <span className="tree-dir-name">{node.name}/</span>
+          {/* Only while collapsed: expanded children show their own badges. */}
+          {!expanded && node.commentCount > 0 && (
+            <span
+              className="tree-comment-count"
+              aria-label={`${node.commentCount} comment${node.commentCount === 1 ? '' : 's'} inside`}
+            >
+              <MessageSquare size={11} aria-hidden="true" />
+              {node.commentCount}
+            </span>
+          )}
         </button>
         {expanded && node.children && (
           <FileTree nodes={node.children} onFileClick={onFileClick} activeFile={activeFile} depth={depth + 1} />
@@ -225,7 +235,11 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
         <span className="tree-file-name">{node.name}</span>
         {node.isReviewed && <Check className="tree-reviewed" size={13} aria-label="Reviewed" />}
         {node.commentCount > 0 && (
-          <span className="tree-comment-count" aria-label={`${node.commentCount} comments`}>
+          <span
+            className="tree-comment-count"
+            aria-label={`${node.commentCount} comment${node.commentCount === 1 ? '' : 's'}`}
+          >
+            <MessageSquare size={11} aria-hidden="true" />
             {node.commentCount}
           </span>
         )}

@@ -84,13 +84,16 @@ function convertNodes(
         commentCount: commentCounts.get(node.file.path) ?? 0,
       });
     } else {
+      const children = convertNodes(node.children, reviewed, commentCounts);
       result.push({
         name: node.name,
         path: node.path,
         type: 'directory',
-        children: convertNodes(node.children, reviewed, commentCounts),
+        children,
         isReviewed: false,
-        commentCount: 0,
+        // Rolled up from descendants: a collapsed directory would otherwise
+        // hide every comment indicator inside it.
+        commentCount: children.reduce((sum, c) => sum + c.commentCount, 0),
       });
     }
   }

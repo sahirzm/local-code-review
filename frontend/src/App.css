@@ -1523,6 +1523,10 @@ body {
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Takes the slack so the collapsed-directory comment badge sits at the end. */
+  flex: 1;
+  min-width: 0;
+  text-align: left;
 }
 
 .tree-status-dot {
@@ -1568,13 +1572,17 @@ body {
 }
 
 .tree-comment-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   background: var(--fill-accent);
   color: var(--color-accent);
   font-size: var(--text-2xs);
-  padding: 1px 6px;
+  padding: 1px 5px 1px 4px;
   border-radius: 8px;
   flex-shrink: 0;
 }
+
 
 .tree-line-counts {
   font-family: var(--font-mono);
