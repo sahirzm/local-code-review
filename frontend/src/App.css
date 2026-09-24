@@ -22,6 +22,16 @@ html {
  * syntax colors come from the shiki theme (see shikiTheme.ts), not from here.
  */
 :root {
+  /* Tells the UA to render native widgets (scrollbars, selects, inputs, form
+   * controls, the canvas behind overscroll) in the theme's mode. Without this
+   * every dark theme still got light scrollbars and light dropdown popups. */
+  color-scheme: dark;
+
+  /* The direction that increases contrast against this theme's background.
+   * Hover shades and selection text shift toward it; light themes flip it to
+   * black so "hover" never means "lower contrast". */
+  --shade-contrast: #ffffff;
+
   --color-bg: #1e1e1e;
   --color-panel: #252525;
   --color-panel-alt: #2d2d2d;
@@ -42,16 +52,28 @@ html {
   --color-success: #3fb950;
   --color-danger: #f85149;
   --color-warning: #d29922;
-  --color-on-accent: #ffffff;
-  --color-selection-bg: #264f78;
-  --color-selection-text: #8bb9fe;
   --color-overlay: rgba(0, 0, 0, 0.6);
 
-  /* Derived hover shades — mix the base toward black/white so they track theme */
-  --color-accent-hover: color-mix(in srgb, var(--color-accent), black 12%);
-  --color-success-strong: color-mix(in srgb, var(--color-success), black 12%);
-  --color-danger-strong: color-mix(in srgb, var(--color-danger), black 15%);
-  --color-link-hover: color-mix(in srgb, var(--color-link), white 15%);
+  /* Ink used on top of a filled role color. Dark themes use light pastel
+   * fills, so a dark ink is what actually reaches 4.5:1 on all of them
+   * (white on #569cd6 is only 2.9:1). */
+  --color-on-accent: #181818;
+  --color-on-success: #181818;
+  --color-on-danger: #181818;
+  --color-on-muted: #181818;
+
+  /* Derived hover shades — mix the base toward the contrast direction so they
+   * track the theme's mode instead of always darkening. */
+  --color-accent-hover: color-mix(in srgb, var(--color-accent), var(--shade-contrast) 12%);
+  --color-success-strong: color-mix(in srgb, var(--color-success), var(--shade-contrast) 12%);
+  --color-danger-strong: color-mix(in srgb, var(--color-danger), var(--shade-contrast) 15%);
+  --color-link-hover: color-mix(in srgb, var(--color-link), var(--shade-contrast) 15%);
+
+  /* Selection tint, derived from the accent so it is always distinguishable
+   * from --color-panel-hover (they were literally the same value in 4 of the
+   * 6 themes, making selected rows invisible). */
+  --color-selection-bg: color-mix(in srgb, var(--color-accent) 24%, var(--color-bg));
+  --color-selection-text: color-mix(in srgb, var(--color-accent), var(--shade-contrast) 22%);
 
   /* Derived translucent fills for badges, active pills, and count chips */
   --fill-accent: color-mix(in srgb, var(--color-accent) 25%, transparent);
@@ -64,6 +86,14 @@ html {
   /* Diff typography — the only diff vars still consumed after @pierre/diffs
    * took over rendering (it colors the diff itself from the shiki theme). */
   --diff-font-family: var(--font-mono);
+
+  /* @pierre/diffs resolves these through the shadow boundary. Shiki themes
+   * that omit `gitDecoration.*` (dark-plus / light-plus) otherwise fall back
+   * to pierre's built-in #5ecc71/#ff6762, which clash with the palette used by
+   * every +/- count, badge and status dot in the surrounding chrome. */
+  --diffs-addition-color-override: var(--color-success);
+  --diffs-deletion-color-override: var(--color-danger);
+  --diffs-modified-color-override: var(--color-link);
 }
 
 /*
@@ -98,34 +128,38 @@ html {
 
 /* ===== Default Light (GitHub-style) ===== */
 [data-theme="default-light"] {
+  color-scheme: light;
+  --shade-contrast: #000000;
   --color-bg: #ffffff;
   --color-panel: #f6f8fa;
-  --color-panel-alt: #f6f8fa;
-  --color-panel-hover: #eaeef2;
+  --color-panel-alt: #eef1f4;
+  --color-panel-hover: #e3e8ed;
   --color-panel-elevated: #f6f8fa;
   --color-border: #d0d7de;
-  --color-border-strong: #d0d7de;
-  --color-border-subtle: #d0d7de;
+  --color-border-strong: #afb8c1;
+  --color-border-subtle: #8c959f;
   --color-text: #24292f;
   --color-text-heading: #24292f;
-  --color-text-strong: #24292f;
-  --color-text-dim: #656d76;
+  --color-text-strong: #1f2328;
+  --color-text-dim: #57606a;
   --color-text-muted: #656d76;
-  --color-text-subtle: #656d76;
+  --color-text-subtle: #6e7781;
   --color-text-faint: #8c959f;
   --color-accent: #0550ae;
   --color-link: #0969da;
   --color-success: #1a7f37;
   --color-danger: #cf222e;
   --color-warning: #9a6700;
-  --color-on-accent: #ffffff;
-  --color-selection-bg: #ddf4ff;
-  --color-selection-text: #0550ae;
   --color-overlay: rgba(0, 0, 0, 0.4);
+  --color-on-accent: #ffffff;
+  --color-on-success: #ffffff;
+  --color-on-danger: #ffffff;
+  --color-on-muted: #ffffff;
 }
 
 /* ===== Catppuccin Mocha (dark) ===== */
 [data-theme="catppuccin-mocha"] {
+  color-scheme: dark;
   --color-bg: #1e1e2e;
   --color-panel: #181825;
   --color-panel-alt: #313244;
@@ -147,13 +181,15 @@ html {
   --color-danger: #f38ba8;
   --color-warning: #f9e2af;
   --color-on-accent: #1e1e2e;
-  --color-selection-bg: #45475a;
-  --color-selection-text: #89b4fa;
+  --color-on-success: #1e1e2e;
+  --color-on-danger: #1e1e2e;
+  --color-on-muted: #1e1e2e;
   --color-overlay: rgba(17, 17, 27, 0.7);
 }
 
 /* ===== Catppuccin Macchiato (dark) ===== */
 [data-theme="catppuccin-macchiato"] {
+  color-scheme: dark;
   --color-bg: #24273a;
   --color-panel: #1e2030;
   --color-panel-alt: #363a4f;
@@ -175,13 +211,15 @@ html {
   --color-danger: #ed8796;
   --color-warning: #eed49f;
   --color-on-accent: #24273a;
-  --color-selection-bg: #494d64;
-  --color-selection-text: #8aadf4;
+  --color-on-success: #24273a;
+  --color-on-danger: #24273a;
+  --color-on-muted: #24273a;
   --color-overlay: rgba(24, 25, 38, 0.7);
 }
 
 /* ===== Catppuccin Frappé (dark) ===== */
 [data-theme="catppuccin-frappe"] {
+  color-scheme: dark;
   --color-bg: #303446;
   --color-panel: #292c3c;
   --color-panel-alt: #414559;
@@ -203,13 +241,16 @@ html {
   --color-danger: #e78284;
   --color-warning: #e5c890;
   --color-on-accent: #303446;
-  --color-selection-bg: #51576d;
-  --color-selection-text: #8caaee;
+  --color-on-success: #303446;
+  --color-on-danger: #303446;
+  --color-on-muted: #303446;
   --color-overlay: rgba(35, 38, 52, 0.7);
 }
 
 /* ===== Catppuccin Latte (light) ===== */
 [data-theme="catppuccin-latte"] {
+  color-scheme: light;
+  --shade-contrast: #000000;
   --color-bg: #eff1f5;
   --color-panel: #e6e9ef;
   --color-panel-alt: #dce0e8;
@@ -231,8 +272,10 @@ html {
   --color-danger: #d20f39;
   --color-warning: #df8e1d;
   --color-on-accent: #eff1f5;
-  --color-selection-bg: #ccd0da;
-  --color-selection-text: #1e66f5;
+  --color-on-danger: #eff1f5;
+  --color-on-muted: #eff1f5;
+  /* latte's green is a mid-tone; #eff1f5 on it is only 3.3:1. */
+  --color-on-success: #11111b;
   --color-overlay: rgba(76, 79, 105, 0.35);
 }
 
@@ -364,11 +407,34 @@ body {
   text-align: center;
 }
 
-/* Sonner toasts — map its design tokens onto the app palette so they match every theme */
-[data-sonner-toaster] {
+/* Sonner toasts — map its design tokens onto the app palette so they match
+ * every theme. The `:root` prefix is required: sonner's own
+ * `[data-sonner-toaster][data-sonner-theme='dark']` block is more specific than
+ * a bare `[data-sonner-toaster]`, so the previous mapping never applied and
+ * toasts rendered as pure black/white with sonner's stock richColors hues. */
+:root [data-sonner-toaster][data-sonner-theme] {
   --normal-bg: var(--color-panel);
+  --normal-bg-hover: var(--color-panel-hover);
   --normal-border: var(--color-border-strong);
+  --normal-border-hover: var(--color-border-subtle);
   --normal-text: var(--color-text);
+
+  --success-bg: color-mix(in srgb, var(--color-success) 14%, var(--color-panel));
+  --success-border: color-mix(in srgb, var(--color-success) 45%, var(--color-panel));
+  --success-text: var(--color-success);
+
+  --info-bg: color-mix(in srgb, var(--color-link) 14%, var(--color-panel));
+  --info-border: color-mix(in srgb, var(--color-link) 45%, var(--color-panel));
+  --info-text: var(--color-link);
+
+  --warning-bg: color-mix(in srgb, var(--color-warning) 14%, var(--color-panel));
+  --warning-border: color-mix(in srgb, var(--color-warning) 45%, var(--color-panel));
+  --warning-text: var(--color-warning);
+
+  --error-bg: color-mix(in srgb, var(--color-danger) 14%, var(--color-panel));
+  --error-border: color-mix(in srgb, var(--color-danger) 45%, var(--color-panel));
+  --error-text: var(--color-danger);
+
   --border-radius: var(--radius-md);
   font-family: var(--font-sans);
 }
@@ -591,13 +657,13 @@ body {
 .category-pill.active { border-width: 2px; font-weight: 700; }
 
 .category-pill-fix { border-color: var(--color-danger); color: var(--color-text-subtle); }
-.category-pill-fix.active { background: var(--color-danger); color: var(--color-on-accent); }
+.category-pill-fix.active { background: var(--color-danger); color: var(--color-on-danger); }
 .category-pill-question { border-color: var(--color-link); color: var(--color-text-subtle); }
 .category-pill-question.active { background: var(--color-link); color: var(--color-on-accent); }
 .category-pill-suggestion { border-color: var(--color-success); color: var(--color-text-subtle); }
-.category-pill-suggestion.active { background: var(--color-success); color: var(--color-on-accent); }
+.category-pill-suggestion.active { background: var(--color-success); color: var(--color-on-success); }
 .category-pill-nit { border-color: var(--color-text-muted); color: var(--color-text-subtle); }
-.category-pill-nit.active { background: var(--color-text-muted); color: var(--color-on-accent); }
+.category-pill-nit.active { background: var(--color-text-muted); color: var(--color-on-muted); }
 
 .comment-form-textarea {
   width: 100%;
@@ -926,7 +992,7 @@ body {
 
 .btn-danger {
   background: var(--color-danger);
-  color: var(--color-on-accent);
+  color: var(--color-on-danger);
   border-color: var(--color-danger);
 }
 
@@ -965,7 +1031,7 @@ body {
 .btn-done {
   padding: 6px 16px;
   background: var(--color-success-strong);
-  color: var(--color-on-accent);
+  color: var(--color-on-success);
   border: 1px solid var(--color-success-strong);
   border-radius: 4px;
   cursor: pointer;
@@ -1113,7 +1179,7 @@ body {
 
 .btn-copy {
   background: var(--color-success-strong);
-  color: var(--color-on-accent);
+  color: var(--color-on-success);
   border-color: var(--color-success-strong);
   min-width: 120px;
 }
@@ -1134,7 +1200,7 @@ body {
 
 .btn-close {
   background: var(--color-danger);
-  color: var(--color-on-accent);
+  color: var(--color-on-danger);
   border-color: var(--color-danger);
 }
 
@@ -1418,7 +1484,17 @@ body {
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
+  background: var(--color-text-muted);
 }
+
+/* Per-status tints, token-driven so they follow the active theme (these were
+ * hardcoded dark-palette hex values inline in Sidebar.tsx, which made the dots
+ * clash on every light theme). */
+.tree-status-dot-added { background: var(--color-success); }
+.tree-status-dot-modified { background: var(--color-warning); }
+.tree-status-dot-deleted { background: var(--color-danger); }
+.tree-status-dot-renamed,
+.tree-status-dot-copied { background: var(--color-link); }
 
 .tree-file-icon {
   flex-shrink: 0;

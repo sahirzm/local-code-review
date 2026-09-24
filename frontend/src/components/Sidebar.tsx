@@ -208,13 +208,7 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
   }
 
   const isActive = activeFile === node.path;
-  const statusColors: Record<string, string> = {
-    added: '#3fb950',
-    modified: '#d29922',
-    deleted: '#f85149',
-    renamed: '#388bfd',
-    copied: '#388bfd',
-  };
+  const status = node.status ?? 'modified';
 
   return (
     <li className={`tree-item tree-file ${isActive ? 'tree-file-active' : ''}`} role="treeitem">
@@ -226,11 +220,7 @@ function TreeNode({ node, onFileClick, activeFile, depth }: TreeNodeProps): Reac
         aria-current={isActive ? 'true' : undefined}
         title={node.path}
       >
-        <span
-          className="tree-status-dot"
-          style={{ background: statusColors[node.status ?? 'modified'] }}
-          aria-label={node.status}
-        />
+        <span className={`tree-status-dot tree-status-dot-${status}`} aria-label={node.status} />
         <FileIcon name={node.name} />
         <span className="tree-file-name">{node.name}</span>
         {node.isReviewed && <Check className="tree-reviewed" size={13} aria-label="Reviewed" />}
