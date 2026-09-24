@@ -11,6 +11,7 @@ function makeActions(): Record<keyof Actions, ReturnType<typeof vi.fn>> {
     nextComment: vi.fn(),
     prevComment: vi.fn(),
     addComment: vi.fn(),
+    toggleReviewed: vi.fn(),
     toggleViewMode: vi.fn(),
     closeForm: vi.fn(),
     toggleHelp: vi.fn(),
@@ -40,6 +41,7 @@ describe('useKeyboardShortcuts', () => {
       ['j', 'nextComment'],
       ['k', 'prevComment'],
       ['c', 'addComment'],
+      ['r', 'toggleReviewed'],
       ['d', 'toggleViewMode'],
       ['?', 'toggleHelp'],
     ];
@@ -110,5 +112,18 @@ describe('SHORTCUT_LIST', () => {
       expect(entry.key).toBeTruthy();
       expect(entry.description).toBeTruthy();
     }
+  });
+
+  // Guards against the help modal drifting from the real bindings: every
+  // documented key must reach a distinct action.
+  it('documents exactly the keys the handler binds', () => {
+    const actions = makeActions();
+    renderHook(() => useKeyboardShortcuts(actions as Actions));
+
+    const documented = SHORTCUT_LIST.map((s) => s.key).filter((k) => k !== 'Esc');
+    for (const key of documented) press(key);
+
+    const fired = Object.values(actions).filter((fn) => fn.mock.calls.length > 0);
+    expect(fired).toHaveLength(documented.length);
   });
 });

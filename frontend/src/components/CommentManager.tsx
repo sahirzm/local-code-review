@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { X, Check, RotateCcw, Trash2, CornerUpRight, Link2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Modal } from './ui/Modal.js';
 import { useReviewStore } from '../hooks/useReviewStore.js';
 import type { Comment, CommentStatus, ParsedFileDiff } from '../shared/types.js';
@@ -136,7 +137,15 @@ export function CommentManager({ open, onOpenChange, diffFiles, onJumpToComment 
                       <button
                         type="button"
                         className="link-btn"
-                        onClick={() => { repinComment(c.id, diffFiles); }}
+                        onClick={() => {
+                          // repinComment returns false when no matching line
+                          // was found; without this the button looked broken.
+                          if (repinComment(c.id, diffFiles)) {
+                            toast.success('Comment re-anchored');
+                          } else {
+                            toast.error('No matching line found — the comment is still orphaned');
+                          }
+                        }}
                         title="Try to re-anchor this comment to a matching line in the current diff"
                       >
                         <Link2 size={13} aria-hidden="true" /> Re-pin

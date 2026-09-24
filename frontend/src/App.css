@@ -522,7 +522,10 @@ body {
   margin-bottom: 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  /* `clip`, not `hidden`: both round off the corners, but `hidden` makes this a
+   * scroll container, which would anchor the sticky header below to this box
+   * (where it can never move) instead of to .diff-view-scroll. */
+  overflow: clip;
   background: var(--color-bg);
   box-shadow: var(--shadow-sm);
 }
@@ -940,10 +943,24 @@ body {
   flex-shrink: 0;
 }
 
-/* File header row with comment button */
+/* File header row with comment button.
+ * Pinned to the top of the scroller so the file path, the +/- counts and the
+ * review toggle stay reachable no matter how deep into a long file you are. */
 .file-header-row {
   display: flex;
   align-items: stretch;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* The children drew their own bottom border; the sticky row owns it now so the
+ * seam does not double up while scrolling. */
+.file-header-row .file-header,
+.file-header-row .btn-file-comment {
+  border-bottom: none;
 }
 
 .file-header-row .file-header {
@@ -1572,7 +1589,6 @@ body {
   padding: 0 8px;
   background: var(--color-panel);
   border: none;
-  border-bottom: 1px solid var(--color-border);
   color: var(--color-text-faint);
   cursor: pointer;
   font-size: var(--text-base);
@@ -1957,3 +1973,56 @@ body {
 
 .diff-gutter-selected { background: var(--color-selection-bg) !important; }
 .diff-code-selected { background: color-mix(in srgb, var(--color-selection-bg) 25%, transparent) !important; }
+
+/* ===== End-of-file actions =====
+ * The review toggle used to live only in the toolbar, a full screen-height away
+ * from where a reader actually finishes a file. This bar sits directly under the
+ * last line of the diff, so "I'm done with this file" is where the eye already
+ * is. The sticky file header carries the same toggle for the top of the file,
+ * and `r` does it from the keyboard. */
+.diff-end-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+}
+
+.diff-end-position {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-review-done {
+  min-height: var(--control-height-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  border-color: var(--color-accent);
+  font-weight: 600;
+}
+
+.btn-review-done:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.btn-review-done:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Already reviewed: the action becomes a quiet undo, not a second call to act. */
+.btn-review-done.btn-reviewed {
+  background: var(--color-panel-alt);
+  color: var(--color-success);
+  border-color: var(--color-border-strong);
+  font-weight: 500;
+}
+
+.btn-review-done.btn-reviewed:hover {
+  background: var(--color-panel-hover);
+}

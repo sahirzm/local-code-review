@@ -6,6 +6,7 @@ interface ShortcutActions {
   nextComment: () => void;
   prevComment: () => void;
   addComment: () => void;
+  toggleReviewed: () => void;
   toggleViewMode: () => void;
   closeForm: () => void;
   toggleHelp: () => void;
@@ -48,6 +49,9 @@ export function useKeyboardShortcuts(actions: ShortcutActions): void {
       case 'c':
         actionsRef.current.addComment();
         break;
+      case 'r':
+        actionsRef.current.toggleReviewed();
+        break;
       case 'd':
         actionsRef.current.toggleViewMode();
         break;
@@ -70,7 +74,8 @@ export const SHORTCUT_LIST: ReadonlyArray<{ key: string; description: string }> 
   { key: 'p', description: 'Previous file' },
   { key: 'j', description: 'Next comment' },
   { key: 'k', description: 'Previous comment' },
-  { key: 'c', description: 'Add comment on focused line' },
+  { key: 'c', description: 'Add overall comment' },
+  { key: 'r', description: 'Mark current file reviewed / not reviewed' },
   { key: 'd', description: 'Toggle split/unified view' },
   { key: 'Esc', description: 'Close comment form / modal' },
   { key: '?', description: 'Toggle keyboard shortcuts help' },

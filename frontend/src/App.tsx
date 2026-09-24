@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Trash2, Check, Circle, MessageSquarePlus, MessageSquare, MessagesSquare, RefreshCw, Columns2, AlignJustify,
+  Trash2, Check, MessageSquarePlus, MessageSquare, MessagesSquare, RefreshCw, Columns2, AlignJustify,
   ChevronLeft, ChevronRight, HelpCircle, X, AlertTriangle, Settings, FileText,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
@@ -488,6 +488,27 @@ function AppContent({
     }
   }, [currentPath, currentReviewed, markFileReviewed, unmarkFileReviewed]);
 
+  // The end-of-file action: finishing a file and picking up the next one is a
+  // single intent, so it is a single button at the point where the reader
+  // actually finishes reading — the bottom of the diff.
+  const reviewAndAdvance = useCallback(() => {
+    if (currentPath == null) return;
+    markFileReviewed(currentPath);
+
+    // Prefer the next file that still needs review, wrapping to the start, so
+    // repeated presses walk the remaining work instead of stopping at the end.
+    const order = [
+      ...filePaths.slice(safeIndex + 1),
+      ...filePaths.slice(0, safeIndex),
+    ];
+    const nextPath = order.find((p) => !isFileReviewed(p));
+    if (nextPath == null) {
+      toast.success('All files reviewed');
+      return;
+    }
+    goToFile(filePaths.indexOf(nextPath));
+  }, [currentPath, filePaths, safeIndex, markFileReviewed, isFileReviewed, goToFile]);
+
   // Sorted comments for navigation — matches visual order on page
   const sortedComments = useMemo(() => {
     const fileOrder = new Map<string, number>();
@@ -556,6 +577,7 @@ function AppContent({
     nextComment: () => navigateComment(1),
     prevComment: () => navigateComment(-1),
     addComment: handleAddOverallComment,
+    toggleReviewed: toggleCurrentReviewed,
     toggleViewMode: handleToggleView,
     closeForm: () => {
       if (showHelp) { setShowHelp(false); return; }
@@ -573,6 +595,9 @@ function AppContent({
   const confirmRefresh = useCallback(() => {
     setShowRefreshWarn(false);
     onRefresh();
+    // Refreshing re-fetches the diff and re-pins comments; without an
+    // acknowledgement an unchanged diff looks like the button did nothing.
+    toast.success('Diff refreshed');
   }, [onRefresh]);
 
   return (
@@ -604,17 +629,6 @@ function AppContent({
                   <button className="btn toolbar-btn toolbar-icon-btn" onClick={() => navigateFile(1)} type="button" title="Next file (n)" aria-label="Next file" disabled={safeIndex >= diffFiles.length - 1}>
                     <ChevronRight size={14} aria-hidden="true" />
                   </button>
-                  <button
-                    className={`btn toolbar-btn btn-review-toggle ${currentReviewed ? 'btn-reviewed' : ''}`}
-                    onClick={toggleCurrentReviewed}
-                    type="button"
-                    disabled={currentPath == null}
-                    title={currentReviewed ? 'Mark file as not reviewed' : 'Mark file as reviewed'}
-                  >
-                    {currentReviewed
-                      ? <><Check size={14} aria-hidden="true" /> Reviewed</>
-                      : <><Circle size={14} aria-hidden="true" /> Review</>}
-                  </button>
                 </div>
                 <div className="toolbar-separator" />
                 <div className="toolbar-group" role="group" aria-label="Comment navigation">
@@ -631,7 +645,10 @@ function AppContent({
                   <button className="btn toolbar-btn" onClick={handleAddOverallComment} type="button" title="Add overall comment (c)">
                     <MessageSquarePlus size={14} aria-hidden="true" /> Comment
                   </button>
-                  <button className="btn toolbar-btn" onClick={() => setShowComments(true)} type="button" title="Comment manager" aria-label="Open comment manager">
+                  {/* No aria-label: the visible text must be contained in the
+                      accessible name (WCAG 2.5.3), so voice control can say
+                      “click Comments”. The hint lives in the tooltip instead. */}
+                  <button className="btn toolbar-btn" onClick={() => setShowComments(true)} type="button" title="Open comment manager">
                     <MessagesSquare size={14} aria-hidden="true" /> Comments{comments.length > 0 ? ` (${comments.length})` : ''}
                   </button>
                   <button className="btn toolbar-btn" onClick={handleRefresh} type="button" title="Refresh diff">
@@ -660,7 +677,53 @@ function AppContent({
             </div>
           </header>
           <OverallComments activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
-          <DiffView files={diffFiles} currentIndex={safeIndex} viewType={viewType} themeType={themeMode} syntaxTheme={syntaxTheme} fontSize={fontSize} lineHeight={lineHeight} activeCommentId={activeCommentId} scrollDirection={scrollDirection} />
+          <DiffView
+            files={diffFiles}
+            currentIndex={safeIndex}
+            viewType={viewType}
+            themeType={themeMode}
+            syntaxTheme={syntaxTheme}
+            fontSize={fontSize}
+            lineHeight={lineHeight}
+            activeCommentId={activeCommentId}
+            scrollDirection={scrollDirection}
+            footer={
+              <div className="diff-end-bar">
+                <button
+                  className="btn toolbar-btn"
+                  onClick={() => navigateFile(-1)}
+                  type="button"
+                  disabled={safeIndex <= 0}
+                  title="Previous file (p)"
+                >
+                  <ChevronLeft size={14} aria-hidden="true" /> Previous file
+                </button>
+                <span className="diff-end-position">
+                  File {safeIndex + 1} of {diffFiles.length}
+                </span>
+                {currentReviewed ? (
+                  <button
+                    className="btn btn-review-done btn-reviewed"
+                    onClick={toggleCurrentReviewed}
+                    type="button"
+                    title="Mark this file as not reviewed (r)"
+                  >
+                    <Check size={15} aria-hidden="true" /> Reviewed — undo
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-review-done"
+                    onClick={reviewAndAdvance}
+                    type="button"
+                    disabled={currentPath == null}
+                    title="Mark reviewed and open the next unreviewed file (r marks without advancing)"
+                  >
+                    <Check size={15} aria-hidden="true" /> Mark reviewed &amp; next
+                  </button>
+                )}
+              </div>
+            }
+          />
         </div>
       </div>
       <StatusBar totalFiles={fileChanges.length} />
