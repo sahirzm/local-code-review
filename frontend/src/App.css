@@ -40,9 +40,8 @@ html {
   --color-text-heading: #e0e0e0;
   --color-text-strong: #cccccc;
   --color-text-dim: #aaaaaa;
-  --color-text-muted: #888888;
+  --color-text-muted: #8f8f8f;
   --color-text-subtle: #999999;
-  --color-text-faint: #666666;
   --color-accent: #569cd6;
   --color-link: #388bfd;
   --color-success: #3fb950;
@@ -68,8 +67,8 @@ html {
   /* Selection tint, derived from the accent so it is always distinguishable
    * from --color-panel-hover (they were literally the same value in 4 of the
    * 6 themes, making selected rows invisible). */
-  --color-selection-bg: color-mix(in srgb, var(--color-accent) 24%, var(--color-bg));
-  --color-selection-text: color-mix(in srgb, var(--color-accent), var(--shade-contrast) 22%);
+  --color-selection-bg: color-mix(in srgb, var(--color-accent) 30%, var(--color-bg));
+  --color-selection-text: color-mix(in srgb, var(--color-accent), var(--shade-contrast) 45%);
 
   /* Derived translucent fills for badges, active pills, and count chips */
   --fill-accent: color-mix(in srgb, var(--color-accent) 25%, transparent);
@@ -158,7 +157,6 @@ html {
   --color-text-dim: #57606a;
   --color-text-muted: #656d76;
   --color-text-subtle: #6e7781;
-  --color-text-faint: #8c959f;
   --color-accent: #0550ae;
   --color-link: #0969da;
   --color-success: #1a7f37;
@@ -188,7 +186,6 @@ html {
   --color-text-dim: #a6adc8;
   --color-text-muted: #a6adc8;
   --color-text-subtle: #9399b2;
-  --color-text-faint: #7f849c;
   --color-accent: #89b4fa;
   --color-link: #89b4fa;
   --color-success: #a6e3a1;
@@ -218,7 +215,6 @@ html {
   --color-text-dim: #a5adcb;
   --color-text-muted: #a5adcb;
   --color-text-subtle: #939ab7;
-  --color-text-faint: #8087a2;
   --color-accent: #8aadf4;
   --color-link: #8aadf4;
   --color-success: #a6da95;
@@ -248,7 +244,6 @@ html {
   --color-text-dim: #a5adce;
   --color-text-muted: #a5adce;
   --color-text-subtle: #949cbb;
-  --color-text-faint: #838ba7;
   --color-accent: #8caaee;
   --color-link: #8caaee;
   --color-success: #a6d189;
@@ -276,20 +271,25 @@ html {
   --color-text: #4c4f69;
   --color-text-heading: #4c4f69;
   --color-text-strong: #5c5f77;
-  --color-text-dim: #6c6f85;
-  --color-text-muted: #6c6f85;
-  --color-text-subtle: #7c7f93;
-  --color-text-faint: #8c8fa1;
+  /* latte's subtext0 and overlay steps all land at 4.37:1 on its own
+   * background, so the quiet end of the ramp collapses onto subtext1. A light
+   * palette simply has fewer legible greys than a dark one. */
+  --color-text-dim: #5c5f77;
+  --color-text-muted: #5c5f77;
+  --color-text-subtle: #5c5f77;
   --color-accent: #1e66f5;
   --color-link: #1e66f5;
-  --color-success: #40a02b;
+  /* Darker than catppuccin's green/yellow: the stock values are 2.96:1 and
+   * 2.31:1 on latte's background, so the review tick and the file-status dots
+   * would be decorative rather than readable. Same hues, more ink. */
+  --color-success: #2d7a1a;
   --color-danger: #d20f39;
-  --color-warning: #df8e1d;
-  --color-on-accent: #eff1f5;
+  --color-warning: #a86a10;
+  /* #eff1f5 on latte's blue is 4.34:1; pure white clears the bar. */
+  --color-on-accent: #ffffff;
   --color-on-danger: #eff1f5;
   --color-on-muted: #eff1f5;
-  /* latte's green is a mid-tone; #eff1f5 on it is only 3.3:1. */
-  --color-on-success: #11111b;
+  --color-on-success: #ffffff;
   --color-overlay: rgba(76, 79, 105, 0.35);
 }
 
@@ -1471,7 +1471,7 @@ body {
 .sidebar-empty {
   padding: 16px;
   text-align: center;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
 
@@ -1556,6 +1556,10 @@ body {
 
 .tree-file-active .tree-file-btn {
   background: var(--color-selection-bg);
+  /* A tint alone cannot separate "selected" from "hovered" without either
+   * colliding with hover or darkening far enough to break text contrast, so
+   * selection also carries a marker that does not depend on fill at all. */
+  box-shadow: inset 2px 0 0 var(--color-accent);
 }
 
 .tree-reviewed {
@@ -1589,7 +1593,7 @@ body {
   padding: 0 8px;
   background: var(--color-panel);
   border: none;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   cursor: pointer;
   font-size: var(--text-base);
   transition: background var(--transition-fast), color var(--transition-fast);
