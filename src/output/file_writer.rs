@@ -1,10 +1,12 @@
 use std::path::Path;
 
+use crate::session::STATE_DIR;
+
 pub fn get_default_output_path() -> String {
     let ts = chrono::Utc::now()
         .format("%Y-%m-%dT%H-%M-%S")
         .to_string();
-    format!(".local-review/{}.md", ts)
+    format!("{}/{}.md", STATE_DIR, ts)
 }
 
 pub async fn write_review_output(markdown: &str, output_path: &str) -> anyhow::Result<String> {

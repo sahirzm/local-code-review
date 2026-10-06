@@ -4,6 +4,9 @@ use sha2::{Digest, Sha256};
 
 use crate::types::ReviewSession;
 
+/// Repo-relative directory holding everything local-review persists: review
+/// markdown, session backups, and the untracked-file ignore list.
+pub const STATE_DIR: &str = ".local-review";
 const SESSION_PREFIX: &str = "local-review:";
 const EXPIRY_MS: i64 = 14 * 24 * 60 * 60 * 1000;
 
@@ -20,7 +23,7 @@ pub fn get_session_key(repo_path_hash: &str, commit_range: &str) -> String {
 }
 
 fn session_dir() -> std::path::PathBuf {
-    Path::new(".local-review").to_path_buf()
+    Path::new(STATE_DIR).to_path_buf()
 }
 
 fn session_path(key: &str) -> std::path::PathBuf {

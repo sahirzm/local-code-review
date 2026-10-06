@@ -52,6 +52,11 @@ async fn main() -> anyhow::Result<()> {
         std::process::exit(1);
     }
 
+    // Prompts on stdin, so it must run before the TUI takes over the terminal.
+    if untracked::applies_to(&options) {
+        untracked::offer_untracked_files(&git::GitModule::new(&cwd_str)?)?;
+    }
+
     if options.tui {
         return run_tui_mode(options, app_config, &cwd, cwd_str).await;
     }
@@ -169,5 +174,6 @@ pub mod review;
 pub mod server;
 pub mod session;
 pub mod types;
+pub mod untracked;
 
 pub mod tui;

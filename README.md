@@ -86,6 +86,27 @@ local-review --tui
 
 Output goes to stdout; server logs go to stderr. This means `local-review > review.md` works cleanly.
 
+### New files in `--unstaged` / `--working` reviews
+
+Working-tree diffs only show files git knows about, so before an `--unstaged`
+or `--working` review `local-review` asks about each untracked file:
+
+| Answer | Effect |
+|--------|--------|
+| `y` | Mark it intent-to-add (`git add -N`): it shows as a whole-file addition, but its content is not staged |
+| `n` | Append it to `.local-review/ignore` so it is never offered again |
+| `a` | `y` for this and every remaining file |
+| `q` | Stop asking; unanswered files are offered again next run |
+
+`.local-review/ignore` uses gitignore syntax, so you can edit it by hand (e.g.
+add `*.log`, or delete a line to be asked about that file again). Files under
+`.local-review/` are never offered. The prompt is skipped when stdin is not a
+TTY and in MCP mode.
+
+This fits an agent loop: stage the reviewed changes, let the agent address the
+comments, then `local-review --unstaged` shows only the follow-up edits,
+including any new files the agent created.
+
 ## CLI Reference
 
 | Flag | Description | Default |

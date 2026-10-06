@@ -1,11 +1,20 @@
+use std::collections::HashSet;
+use std::path::Path;
 use std::str;
 
-use git2::{DiffFormat, DiffOptions, Repository};
+use git2::{
+    DiffFormat, DiffOptions, FileMode, Index, IndexEntry, IndexEntryExtendedFlag, IndexTime,
+    Repository,
+};
 
 use crate::types::{FileChange, FileStatus};
 
 pub mod diff_parser;
 pub mod resolve_range;
+
+const INDEX_FILE_NAME: &str = "index";
+/// Index entry `flags` keep the path length in their low 12 bits.
+const INDEX_ENTRY_PATH_LENGTH_MASK: usize = 0x0fff;
 
 pub struct GitModule {
     pub repo_path: String,
@@ -139,20 +148,189 @@ impl GitModule {
         Self::diff_to_string(self.repo(), diff)
     }
 
+    /// Intent-to-add (`git add -N`) entries are left out, matching
+    /// `git diff --cached`: their content is not staged yet.
     pub fn get_staged_diff(&self, context_lines: u32) -> anyhow::Result<String> {
         let head_tree = self.repo().head()?.peel_to_tree().ok();
         let mut opts = DiffOptions::new();
         opts.context_lines(context_lines);
-        let diff = self.repo().diff_tree_to_index(head_tree.as_ref(), None, Some(&mut opts))?;
+        let intent_to_add = self.intent_to_add_paths()?;
+        let index = if intent_to_add.is_empty() {
+            None
+        } else {
+            Some(self.index_without(&intent_to_add)?)
+        };
+        let diff = self
+            .repo()
+            .diff_tree_to_index(head_tree.as_ref(), index.as_ref(), Some(&mut opts))?;
         Self::diff_to_string(self.repo(), diff)
     }
 
+    /// Intent-to-add (`git add -N`) entries show as whole-file additions,
+    /// matching `git diff`.
     pub fn get_unstaged_diff(&self, context_lines: u32) -> anyhow::Result<String> {
-        let mut opts = DiffOptions::new();
-        opts.include_untracked(false);
-        opts.context_lines(context_lines);
-        let diff = self.repo().diff_index_to_workdir(None, Some(&mut opts))?;
+        let intent_to_add = self.intent_to_add_paths()?;
+        if intent_to_add.is_empty() {
+            let mut opts = DiffOptions::new();
+            opts.include_untracked(false);
+            opts.context_lines(context_lines);
+            let diff = self.repo().diff_index_to_workdir(None, Some(&mut opts))?;
+            return Self::diff_to_string(self.repo(), diff);
+        }
+        self.get_unstaged_diff_with_intent_to_add(&intent_to_add, context_lines)
+    }
+
+    /// libgit2 has no intent-to-add awareness and would diff these entries
+    /// against the empty blob as plain modifications. Dropping them from a
+    /// private index copy turns them into untracked files, whose content
+    /// libgit2 renders as new-file additions. That untracked diff is limited to
+    /// exactly those paths so other untracked files are never read; tracked
+    /// changes come from a separate diff merged into it. An intent-to-add file that is also gitignored is not shown, because
+    /// libgit2 never prints content for ignored files.
+    fn get_unstaged_diff_with_intent_to_add(
+        &self,
+        intent_to_add: &HashSet<String>,
+        context_lines: u32,
+    ) -> anyhow::Result<String> {
+        let index = self.index_without(intent_to_add)?;
+
+        let mut intent_to_add_opts = DiffOptions::new();
+        intent_to_add_opts
+            .include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .show_untracked_content(true)
+            .disable_pathspec_match(true)
+            .context_lines(context_lines);
+        for path in intent_to_add {
+            intent_to_add_opts.pathspec(path);
+        }
+        let mut diff = self
+            .repo()
+            .diff_index_to_workdir(Some(&index), Some(&mut intent_to_add_opts))?;
+
+        let mut tracked_opts = DiffOptions::new();
+        tracked_opts.include_untracked(false).context_lines(context_lines);
+        let tracked = self
+            .repo()
+            .diff_index_to_workdir(Some(&index), Some(&mut tracked_opts))?;
+
+        // A merged diff prints with the receiving diff's options, so it must be
+        // the one that shows untracked content.
+        diff.merge(&tracked)?;
         Self::diff_to_string(self.repo(), diff)
+    }
+
+    fn intent_to_add_paths(&self) -> anyhow::Result<HashSet<String>> {
+        let mut index = self.repo().index()?;
+        index.read(false)?;
+        Ok(index
+            .iter()
+            .filter(|entry| {
+                IndexEntryExtendedFlag::from_bits_truncate(entry.flags_extended).is_intent_to_add()
+            })
+            .map(|entry| String::from_utf8_lossy(&entry.path).into_owned())
+            .collect())
+    }
+
+    /// A private copy of the on-disk index minus `paths`; the repository's own
+    /// index is neither modified nor written.
+    fn index_without(&self, paths: &HashSet<String>) -> anyhow::Result<Index> {
+        let mut index = Index::open(&self.repo().path().join(INDEX_FILE_NAME))?;
+        for path in paths {
+            index.remove_path(Path::new(path))?;
+        }
+        Ok(index)
+    }
+
+    /// Record `paths` as intent-to-add, like `git add -N`, so the content is
+    /// visible to working-tree diffs without being staged. Returns the paths
+    /// left alone: those already in the index and those that are no longer a
+    /// regular file or symlink.
+    pub fn mark_intent_to_add(&self, paths: &[String]) -> anyhow::Result<Vec<String>> {
+        if paths.is_empty() {
+            return Ok(Vec::new());
+        }
+        let workdir = self.workdir()?;
+        // Git treats the empty blob as implicitly present; libgit2 needs it in
+        // the object database before diffs can read the entry back.
+        let empty_blob = self.repo().blob(&[])?;
+        let mut index = self.repo().index()?;
+        // The cached index predates the interactive prompt; reload it so
+        // changes staged meanwhile are neither reverted nor overwritten.
+        index.read(false)?;
+
+        let mut skipped = Vec::new();
+        for path in paths {
+            let mode = Self::worktree_file_mode(&workdir.join(path));
+            match mode {
+                Some(mode) if index.get_path(Path::new(path), 0).is_none() => {
+                    index.add(&Self::intent_to_add_entry(path, mode, empty_blob))?;
+                }
+                _ => skipped.push(path.clone()),
+            }
+        }
+        index.write()?;
+        Ok(skipped)
+    }
+
+    fn intent_to_add_entry(path: &str, mode: FileMode, empty_blob: git2::Oid) -> IndexEntry {
+        let unset_time = IndexTime::new(0, 0);
+        IndexEntry {
+            ctime: unset_time,
+            mtime: unset_time,
+            dev: 0,
+            ino: 0,
+            mode: u32::from(mode),
+            uid: 0,
+            gid: 0,
+            file_size: 0,
+            id: empty_blob,
+            flags: path.len().min(INDEX_ENTRY_PATH_LENGTH_MASK) as u16,
+            flags_extended: IndexEntryExtendedFlag::INTENT_TO_ADD.bits(),
+            path: path.as_bytes().to_vec(),
+        }
+    }
+
+    /// `None` when `path` is missing or is neither a regular file nor a symlink.
+    fn worktree_file_mode(path: &Path) -> Option<FileMode> {
+        let metadata = std::fs::symlink_metadata(path).ok()?;
+        let file_type = metadata.file_type();
+        if file_type.is_symlink() {
+            return Some(FileMode::Link);
+        }
+        if !file_type.is_file() {
+            return None;
+        }
+        Some(if Self::is_executable(&metadata) {
+            FileMode::BlobExecutable
+        } else {
+            FileMode::Blob
+        })
+    }
+
+    #[cfg(unix)]
+    fn is_executable(metadata: &std::fs::Metadata) -> bool {
+        use std::os::unix::fs::PermissionsExt;
+        const ANY_EXECUTE_BITS: u32 = 0o111;
+        metadata.permissions().mode() & ANY_EXECUTE_BITS != 0
+    }
+
+    #[cfg(not(unix))]
+    fn is_executable(_metadata: &std::fs::Metadata) -> bool {
+        false
+    }
+
+    pub fn workdir(&self) -> anyhow::Result<&Path> {
+        self.repo()
+            .workdir()
+            .ok_or_else(|| anyhow::anyhow!("repository has no working tree"))
+    }
+
+    /// Add gitignore-syntax `rules` for this handle only; nothing is written to
+    /// disk and other handles on the same repository are unaffected.
+    pub fn add_ignore_rules(&self, rules: &str) -> anyhow::Result<()> {
+        self.repo().add_ignore_rule(rules)?;
+        Ok(())
     }
 
     pub fn get_working_diff(&self, context_lines: u32) -> anyhow::Result<String> {
@@ -414,6 +592,158 @@ mod tests {
         fs::write(fx.path.join("a.txt"), "modified\n").unwrap();
         let untracked = fx.git.list_untracked().unwrap();
         assert_eq!(untracked, vec!["untracked.txt".to_string()]);
+    }
+
+    #[test]
+    fn intent_to_add_file_is_a_whole_file_addition_in_unstaged_diff() {
+        let fx = fixture();
+        fs::write(fx.path.join("new.txt"), "alpha\nbeta\n").unwrap();
+        fs::write(fx.path.join("other.txt"), "untouched\n").unwrap();
+        fs::write(fx.path.join("a.txt"), "one\nTWO\nthree\n").unwrap();
+
+        fx.git.mark_intent_to_add(&["new.txt".to_string()]).unwrap();
+
+        let parsed = parse_diff(&fx.git.get_unstaged_diff(3).unwrap());
+        let names: Vec<&str> = parsed.iter().map(|f| f.new_path.as_str()).collect();
+        assert_eq!(names, vec!["a.txt", "new.txt"]);
+        let added = parsed.iter().find(|f| f.new_path == "new.txt").unwrap();
+        assert_eq!(added.status, FileStatus::Added);
+        assert_eq!((added.additions, added.deletions), (2, 0));
+    }
+
+    fn index_entry(fx: &Fixture, path: &str) -> Option<IndexEntry> {
+        git2::Repository::open(&fx.path)
+            .unwrap()
+            .index()
+            .unwrap()
+            .get_path(Path::new(path), 0)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn intent_to_add_entry_keeps_the_worktree_file_mode() {
+        let fx = fixture();
+        fs::write(fx.path.join("plain.txt"), "x\n").unwrap();
+        fs::write(fx.path.join("run.sh"), "#!/bin/sh\n").unwrap();
+        fs::set_permissions(
+            fx.path.join("run.sh"),
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink("plain.txt", fx.path.join("link")).unwrap();
+
+        let paths = vec!["plain.txt".to_string(), "run.sh".to_string(), "link".to_string()];
+        assert!(fx.git.mark_intent_to_add(&paths).unwrap().is_empty());
+
+        let mode = |path| index_entry(&fx, path).unwrap().mode;
+        assert_eq!(mode("plain.txt"), u32::from(FileMode::Blob));
+        assert_eq!(mode("run.sh"), u32::from(FileMode::BlobExecutable));
+        assert_eq!(mode("link"), u32::from(FileMode::Link));
+    }
+
+    #[test]
+    fn mark_intent_to_add_keeps_a_file_staged_after_the_index_was_loaded() {
+        let fx = fixture();
+        fs::write(fx.path.join("new.txt"), "staged content\n").unwrap();
+        assert_eq!(fx.git.list_untracked().unwrap(), vec!["new.txt".to_string()]);
+
+        let other = git2::Repository::open(&fx.path).unwrap();
+        let mut other_index = other.index().unwrap();
+        other_index.add_path(Path::new("new.txt")).unwrap();
+        other_index.write().unwrap();
+        let staged_id = index_entry(&fx, "new.txt").unwrap().id;
+
+        let skipped = fx.git.mark_intent_to_add(&["new.txt".to_string()]).unwrap();
+
+        assert_eq!(skipped, vec!["new.txt".to_string()]);
+        assert_eq!(index_entry(&fx, "new.txt").unwrap().id, staged_id);
+    }
+
+    #[test]
+    fn mark_intent_to_add_skips_directories_and_missing_files() {
+        let fx = fixture();
+        fs::create_dir_all(fx.path.join("nested")).unwrap();
+        git2::Repository::init(fx.path.join("nested")).unwrap();
+        fs::write(fx.path.join("nested").join("inner.txt"), "x").unwrap();
+        assert_eq!(fx.git.list_untracked().unwrap(), vec!["nested/".to_string()]);
+
+        let paths = vec!["nested/".to_string(), "gone.txt".to_string()];
+        let skipped = fx.git.mark_intent_to_add(&paths).unwrap();
+
+        assert_eq!(skipped, paths);
+        assert!(fx.git.intent_to_add_paths().unwrap().is_empty());
+    }
+
+    #[test]
+    fn unstaged_diff_leaves_the_index_file_untouched() {
+        let fx = fixture();
+        fs::write(fx.path.join("new.txt"), "alpha\n").unwrap();
+        fx.git.mark_intent_to_add(&["new.txt".to_string()]).unwrap();
+        let index_path = fx.path.join(".git").join(INDEX_FILE_NAME);
+        let before = fs::read(&index_path).unwrap();
+
+        fx.git.get_unstaged_diff(3).unwrap();
+        fx.git.get_staged_diff(3).unwrap();
+
+        assert_eq!(fs::read(&index_path).unwrap(), before);
+    }
+
+    #[test]
+    fn staged_diff_keeps_real_staged_files_next_to_intent_to_add_ones() {
+        let fx = fixture();
+        fs::write(fx.path.join("new.txt"), "alpha\n").unwrap();
+        fs::write(fx.path.join("staged.txt"), "s\n").unwrap();
+        let repo = git2::Repository::open(&fx.path).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("staged.txt")).unwrap();
+        index.write().unwrap();
+        fx.git.mark_intent_to_add(&["new.txt".to_string()]).unwrap();
+
+        let parsed = parse_diff(&fx.git.get_staged_diff(3).unwrap());
+
+        let names: Vec<&str> = parsed.iter().map(|f| f.new_path.as_str()).collect();
+        assert_eq!(names, vec!["staged.txt"]);
+    }
+
+    #[test]
+    fn intent_to_add_file_is_no_longer_untracked() {
+        let fx = fixture();
+        fs::write(fx.path.join("new.txt"), "alpha\n").unwrap();
+        fx.git.mark_intent_to_add(&["new.txt".to_string()]).unwrap();
+        assert!(fx.git.list_untracked().unwrap().is_empty());
+    }
+
+    #[test]
+    fn intent_to_add_file_is_excluded_from_staged_diff() {
+        let fx = fixture();
+        fs::write(fx.path.join("new.txt"), "alpha\n").unwrap();
+        fx.git.mark_intent_to_add(&["new.txt".to_string()]).unwrap();
+        assert!(parse_diff(&fx.git.get_staged_diff(3).unwrap()).is_empty());
+    }
+
+    #[test]
+    fn intent_to_add_file_is_an_addition_in_working_diff() {
+        let fx = fixture();
+        fs::write(fx.path.join("new.txt"), "alpha\nbeta\n").unwrap();
+        fx.git.mark_intent_to_add(&["new.txt".to_string()]).unwrap();
+
+        let parsed = parse_diff(&fx.git.get_working_diff(3).unwrap());
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].status, FileStatus::Added);
+        assert_eq!(parsed[0].additions, 2);
+    }
+
+    #[test]
+    fn ignore_rules_hide_untracked_files_for_this_handle_only() {
+        let fx = fixture();
+        fs::write(fx.path.join("keep.txt"), "x").unwrap();
+        fs::write(fx.path.join("skip.txt"), "x").unwrap();
+
+        fx.git.add_ignore_rules("/skip.txt").unwrap();
+
+        assert_eq!(fx.git.list_untracked().unwrap(), vec!["keep.txt".to_string()]);
+        let fresh = GitModule::new(fx.path.to_str().unwrap()).unwrap();
+        assert_eq!(fresh.list_untracked().unwrap().len(), 2);
     }
 
     #[test]
